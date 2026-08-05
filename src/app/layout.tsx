@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import type { ReactNode } from "react";
 import { Barlow_Condensed, Inter } from "next/font/google";
 import { MotionProvider } from "@/components/layout/MotionProvider";
 import "./globals.css";
@@ -25,7 +26,7 @@ export const metadata: Metadata = {
   description: "Hall of Blamers' own broadcast network.",
 };
 
-export default function RootLayout({ children }: LayoutProps<"/">) {
+export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en" className={`${barlowCondensed.variable} ${inter.variable}`}>
       <body className="min-h-screen bg-bg text-ink antialiased">

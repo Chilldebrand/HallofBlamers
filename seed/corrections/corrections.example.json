@@ -1,0 +1,20 @@
+[
+  {
+    "targetTable": "matchups",
+    "targetKey": { "season": 2023, "week": 4, "espn_matchup_id": 2 },
+    "field": "home_score",
+    "value": 118.4,
+    "reason": "ESPN's live score never settled after a stat correction; commissioner confirmed the final box score from the league group chat screenshot.",
+    "createdBy": "commissioner@example.com",
+    "active": true
+  },
+  {
+    "targetTable": "roster_slots",
+    "targetKey": { "season": 2023, "week": 4, "team_season_id": 12, "player_id": 3918298 },
+    "field": "lineup_slot",
+    "value": "FLEX",
+    "reason": "ESPN reported this player in the WR slot for one box score refresh; the manager's actual lineup submission (screenshotted before kickoff) had him in FLEX.",
+    "createdBy": "commissioner@example.com",
+    "active": true
+  }
+]

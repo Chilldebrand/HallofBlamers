@@ -1,0 +1,286 @@
+@import "tailwindcss";
+
+/*
+ * Kelly-green "modern editorial sports" palette — see
+ * docs/design/redesign-2026-08/README.md (design source of truth for the
+ * ongoing redesign; its .dc.html frames are designer mockups, never a data
+ * source). Light is the DEFAULT theme; dark applies via
+ * `prefers-color-scheme` ONLY — no manual toggle in v1 (Task 21 ruling).
+ *
+ * Two golds, one role in light mode (README: "Two golds, one role"):
+ * `--color-gold-ink` for text/rank numbers/rules, `--color-gold-fill` for
+ * solid badge/belt-mark fills (a touch lighter — a solid gold shape reads
+ * darker than the same gold as text on cream). Dark mode collapses both to
+ * the single `--color-gold`.
+ *
+ * Legacy token names (`--color-bg`, `--color-surface`, `--color-surface-hover`,
+ * bare `--color-gold`) are kept so pages not yet restyled by Tasks 22-24
+ * stay legible under the new palette without per-file edits (AGENTS.md/Task
+ * 21 brief: "old token names should map/alias sensibly or be migrated
+ * mechanically"). They're deliberately pointed at CREAM values, matching
+ * `--color-ink`'s new dark-on-light role — old markup always pairs
+ * `bg-surface`/`bg-bg` with `text-ink`, and a couple of routes
+ * ((league)/error.tsx, /login) render straight on `bg-bg` with no sheet
+ * wrapper at all, so a dark value there would make their own text
+ * unreadable. `--color-line`/`--color-line-soft`/bare `--color-gold` don't
+ * have that failure mode (a colored rule/ink is still legible on cream), so
+ * those simply take the README's real values directly — no separate alias.
+ */
+@theme {
+  /* Chrome — nav bar, ticker, scoreboard bands, belt card, footer strip. */
+  --color-chrome: #16382c;
+  --color-chrome-deep: #0b2018;
+  --color-chrome-raised: #1d4536;
+  --color-frame: #102b21;
+  --color-line: #2b5a48;
+  --color-line-soft: #1d4536;
+  --color-ink-on-chrome: #eef5f0;
+  --color-muted-on-chrome: #8fae9f;
+
+  /* Content sheet — the cream block holding page content. */
+  --color-sheet: #f2f1ec;
+  --color-sheet-raised: #faf9f4;
+  --color-ink: #14201a;
+  --color-ink-trailing: #3a453e;
+  --color-muted: #5f6b62;
+  --color-line-sheet: #dcded7;
+  --color-line-sheet-soft: #e4e2d9;
+  --color-line-sheet-strong: #c9ccc4;
+
+  /* Kelly (actives/links/"you") · gold (champion + belt identity) · tarnish
+     (sacko) · live/loss. */
+  --color-kelly: #0d7a41;
+  --color-kelly-deep: #0a5730;
+  --color-kelly-bright: #12b25c;
+  --color-gold-ink: #cc9a12;
+  --color-gold-fill: #d9a61c;
+  --color-tarnish-ink: #7a6a45;
+  --color-tarnish-fill: #9c8b63;
+  --color-sacko-cell: #faf9f4;
+  --color-live: #c0392b;
+  --color-loss: #c0392b;
+
+  /* "You" row fill on the sheet (Standings Real/All-Play/Luck rows — README doesn't name this
+     token, just gives the literal per-mode value in the Standings mockup frames 7a/7b: light
+     #eaefe9, a step darker than --color-sheet-raised so the champion row still reads as MORE
+     raised; dark #0e2117, deliberately reusing chrome's own dark value rather than
+     --color-sheet-raised's #143024, since 7b's champion row already claims that shade). */
+  --color-viewer-fill: #eaefe9;
+
+  /* Legacy aliases — see file-header comment. */
+  --color-bg: #f2f1ec;
+  --color-surface: #faf9f4;
+  --color-surface-hover: #eaefe9;
+  --color-gold: #cc9a12;
+
+  /* Typography scale, README "Typography" table (fonts unchanged — Barlow
+     Condensed display / Inter body, loaded via next/font in layout.tsx). Not
+     every row gets a named token: body copy (15-21px) and table cells
+     (14-15px) are ranges meant to flex with context, already covered by
+     Tailwind's default text-sm/base/lg/xl scale. */
+  --text-page-title: 64px;
+  --text-page-title--line-height: 0.92;
+  --text-hero: 92px;
+  --text-hero--line-height: 0.9;
+  --tracking-hero: 0.01em;
+  --text-franchise-name: 72px;
+  --text-franchise-name--line-height: 0.92;
+  --text-section-heading: 24px;
+  --tracking-section-heading: 0.06em;
+  --text-nav-item: 15px;
+  --tracking-nav-item: 0.12em;
+  --text-eyebrow: 12px;
+  --tracking-eyebrow: 0.2em;
+  --text-row-name: 20px;
+  --text-score-detail: 76px;
+  --text-score-card: 30px;
+  --text-badge: 10px;
+  --tracking-badge: 0.17em;
+
+  /* Radius: 0 everywhere except season pills / status dots / belt marks
+     (README). Overriding the core scale means every `rounded-lg` etc.
+     already in the codebase goes flat automatically, with zero page edits —
+     `rounded-full` (pills, dots) is untouched; belt marks use an explicit
+     `rounded-[2px]` arbitrary value (see FranchiseName.tsx). */
+  --radius-xs: 0px;
+  --radius-sm: 0px;
+  --radius-md: 0px;
+  --radius-lg: 0px;
+  --radius-xl: 0px;
+  --radius-2xl: 0px;
+  --radius-3xl: 0px;
+  --radius-4xl: 0px;
+  --radius-full: 9999px;
+
+  /* Transitions: ≤120ms, color only (README interaction rule). Overriding
+     the default brings every bare `transition-colors` already in the
+     codebase into compliance without touching those call sites. */
+  --default-transition-duration: 120ms;
+}
+
+/* next/font sets these CSS custom properties on <html> at runtime, so they
+   have to stay in an `inline` theme block rather than being resolved as
+   static values at build time. */
+@theme inline {
+  --font-display: var(--font-display);
+  --font-body: var(--font-body);
+}
+
+:root {
+  /* Supports both — the browser picks native form-control/scrollbar
+     chrome to match prefers-color-scheme. No manual toggle. */
+  color-scheme: light dark;
+}
+
+/* Dark-mode overrides — same custom property names, redefined for
+   prefers-color-scheme: dark. Utilities reference var(--color-x), so this
+   alone repaints every already-generated class; no `dark:` variants
+   needed anywhere. README's dark table intentionally collapses several
+   light-only roles (ink-on-chrome vs ink, gold-ink vs gold-fill, line vs
+   line-sheet) into a single value each — dark chrome is dark enough that
+   the sheet's own ink/muted/line already read fine on it. */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-chrome: #0e2117;
+    --color-chrome-deep: #050f0a;
+    --color-chrome-raised: #143024;
+    --color-frame: #08160f;
+    --color-line: #234034;
+    --color-line-soft: #143024;
+    --color-ink-on-chrome: #e9f2ec;
+    --color-muted-on-chrome: #7d9b8c;
+
+    --color-sheet: #0c1f16;
+    --color-sheet-raised: #143024;
+    --color-ink: #e9f2ec;
+    --color-ink-trailing: #b7c8bf;
+    --color-muted: #7d9b8c;
+    --color-line-sheet: #234034;
+    --color-line-sheet-soft: #143024;
+    --color-line-sheet-strong: #234034;
+
+    --color-kelly: #17c964;
+    --color-kelly-deep: #17c964;
+    --color-kelly-bright: #34d97e;
+    --color-gold-ink: #e3b53c;
+    --color-gold-fill: #e3b53c;
+    --color-tarnish-ink: #a2916a;
+    --color-tarnish-fill: #8a7a52;
+    --color-sacko-cell: #20200f;
+    --color-live: #f0575c;
+    --color-loss: #f0575c;
+    --color-viewer-fill: #0e2117;
+
+    --color-bg: #0c1f16;
+    --color-surface: #143024;
+    --color-surface-hover: #143024;
+    --color-gold: #e3b53c;
+  }
+}
+
+html,
+body {
+  /* PFR-style dense tables: every numeral gets tabular figures, globally. */
+  font-variant-numeric: tabular-nums;
+}
+
+body {
+  background: var(--color-bg);
+  color: var(--color-ink);
+  font-family: var(--font-body), ui-sans-serif, system-ui, sans-serif;
+}
+
+/* Display face: uppercase, wide tracking. Use on headings/eyebrows/labels —
+   never on long-form body copy. */
+.display {
+  font-family: var(--font-display), ui-sans-serif, system-ui, sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+/* Column-header tooltip: pure-CSS (no JS, server-renderable). The text lives in
+   data-tip; the bubble shows instantly on hover AND on focus, so phone/keyboard
+   users get it by tapping (the span is focusable via tabIndex). The dotted
+   underline + help cursor is the discoverability affordance native `title`
+   lacks — which is why this exists. `.tip-end` anchors the bubble to the right
+   edge for right-aligned columns so it can't overflow the viewport. */
+.tip {
+  position: relative;
+  cursor: help;
+  text-decoration: underline dotted;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+}
+.tip::after {
+  content: attr(data-tip);
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 40;
+  width: max-content;
+  max-width: 260px;
+  padding: 8px 10px;
+  border-radius: 4px;
+  background: var(--color-ink);
+  color: var(--color-sheet);
+  font-family: var(--font-body), ui-sans-serif, system-ui, sans-serif;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.45;
+  letter-spacing: normal;
+  text-transform: none;
+  text-align: left;
+  white-space: normal;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+.tip-end::after {
+  left: auto;
+  right: 0;
+}
+.tip:hover::after,
+.tip:focus-visible::after,
+.tip:focus::after {
+  opacity: 1;
+  visibility: visible;
+}
+
+/* Ticker marquee: pure-CSS infinite scroll, pauses on hover, and disables
+   entirely under prefers-reduced-motion without needing JS to react to it. */
+@keyframes ticker-scroll {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+.ticker-track {
+  animation-name: ticker-scroll;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+}
+
+/* Live dot — README "wbb-blink": opacity 1 -> 0.28, 1.1s infinite. */
+@keyframes wbb-blink {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.28;
+  }
+}
+
+.wbb-blink {
+  animation: wbb-blink 1.1s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ticker-track,
+  .wbb-blink {
+    animation: none;
+  }
+}

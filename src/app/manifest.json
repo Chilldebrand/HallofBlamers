@@ -1,0 +1,16 @@
+{
+  "name": "Hall of Blamers",
+  "short_name": "HOB",
+  "description": "Hall of Blamers' own broadcast network.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#102b21",
+  "theme_color": "#102b21",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}

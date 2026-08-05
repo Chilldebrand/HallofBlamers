@@ -1,0 +1,131 @@
+# Hall of Blamers self-host stack (Task 15). Four services, ONE image built from ./Dockerfile:
+#   - migrate     one-shot: applies pending DB migrations, then exits (Task 28)
+#   - web         the Next standalone server (owner + league mates browse this, via cloudflared)
+#   - worker      the sole writer of ESPN-derived data — scheduled sync/backup jobs
+#   - cloudflared the tunnel that exposes `web` to the internet without opening any router port
+#
+# See docs/RUNBOOK.md for first-time setup and day-to-day operations — the `ops/*.sh` scripts are
+# the only commands the operator should ever need to run directly.
+#
+# Migration ordering (Task 28): `migrate` is the ONLY thing that runs `npm run db:migrate` as part
+# of a normal deploy. `web` and `worker` both `depends_on: migrate: condition:
+# service_completed_successfully`, so neither starts — and neither serves a single request or sync
+# tick — until `migrate` has exited 0 against the current schema. If a migration fails, `migrate`
+# exits non-zero, Compose refuses to start `web`/`worker` at all, and `docker compose up` itself
+# returns a non-zero exit code (ops/deploy.sh's `set -euo pipefail` then stops the whole deploy
+# script right there — see its trap). This closes a real gap: without this, `web` could start and
+# serve pages against a stale schema (missing table/column) while migrations were still catching up
+# in a separate, uncoordinated container — exactly what happened locally when migration 0006
+# shipped but wasn't applied. `worker/index.ts` still calls `runMigrations()` once more at its own
+# startup (unrelated Task 15/live-backend code, deliberately left untouched here) — that call is a
+# guaranteed no-op by the time it runs, since `migrate` already applied everything first; drizzle's
+# journal makes re-running migrations idempotent (see src/server/db/__tests__/migrate.test.ts).
+
+x-app-common: &app-common
+  build:
+    context: .
+    dockerfile: Dockerfile
+  image: hallofblamers:latest
+  env_file: .env
+  volumes:
+    # The ONLY place either service persists anything — the live DB (data/league.db) and nightly
+    # backups (data/backups/). Everything else in the image is disposable/rebuildable.
+    - ./data:/data
+  # Inside the container the DB always lives at /data/league.db (the `./data:/data` volume above)
+  # regardless of what DATABASE_PATH is set to in .env for local (non-Docker) development.
+  environment:
+    - DATABASE_PATH=/data/league.db
+  restart: unless-stopped
+  logging:
+    driver: json-file
+    options:
+      max-size: "10m"
+      max-file: "3"
+
+services:
+  migrate:
+    <<: *app-common
+    # One-shot (Task 28): applies any pending DB migrations, then exits. `npm run db:migrate` ->
+    # `tsx src/server/db/migrate.ts`, the same drizzle-journal-based runner `worker/index.ts` calls
+    # at its own startup — idempotent, so running it here first and again from `worker` moments
+    # later is safe (see src/server/db/__tests__/migrate.test.ts). MUST override `restart` from the
+    # anchor's `unless-stopped`: a one-shot container that exits 0 would otherwise be restarted by
+    # Compose forever. A non-zero exit here (a broken migration) is exactly what should stop the
+    # deploy — see `depends_on` below on `web`/`worker`, and the file-level comment above.
+    command: ["npm", "run", "db:migrate"]
+    restart: "no"
+
+  web:
+    <<: *app-common
+    # The standalone server Next builds with `output: "standalone"` (see next.config.ts and the
+    # Dockerfile's runtime stage) — NOT `next start`, which needs the full (non-standalone)
+    # .next/ output and devDependencies this image doesn't ship.
+    command: ["node", "server.js"]
+    # Re-declares DATABASE_PATH even though x-app-common already sets it: YAML's `<<:` merge
+    # REPLACES a list-valued key wholesale rather than concatenating it (unlike map-valued keys,
+    # which merge per-key) — since this service needs its own `environment:` list anyway (for
+    # PORT/HOSTNAME), the anchor's DATABASE_PATH entry would otherwise be silently dropped, not
+    # inherited. Don't "clean up" this apparent duplication — removing it breaks DATABASE_PATH.
+    environment:
+      - DATABASE_PATH=/data/league.db
+      - PORT=3000
+      - HOSTNAME=0.0.0.0
+    healthcheck:
+      # Uses Node's own built-in `fetch` (Node 18+) rather than curl/wget, neither of which
+      # node:22-slim ships by default — one less package to install just for a healthcheck.
+      test: ['CMD', 'node', '-e', 'fetch("http://localhost:3000/api/health").then((r) => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1));']
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    ports:
+      # Loopback-only — reachable as http://127.0.0.1:3000 from ON the box (ops/deploy.sh and
+      # ops/status.sh both curl this for a post-deploy health check) but NOT from the box's public
+      # network interface. The public path is entirely through cloudflared, which reaches `web`
+      # over the compose-internal network by service name (http://web:3000) regardless of this
+      # mapping — this is purely a host-side debugging/scripting convenience, never how real
+      # traffic arrives.
+      - "127.0.0.1:3000:3000"
+    depends_on:
+      # Task 28 — see the file-level comment above. `web` must not even start until `migrate` has
+      # applied the current schema, closing the race where it could otherwise serve pages against a
+      # stale one.
+      migrate:
+        condition: service_completed_successfully
+
+  worker:
+    <<: *app-common
+    # `npm run worker` -> `tsx worker/index.ts` (see package.json and worker/index.ts's docstring
+    # for why tsx-in-production is a deliberate choice here, not an oversight). Also calls
+    # `runMigrations()` once more at its own startup, on top of the dedicated `migrate` service
+    # below (Task 28) — harmless and left as-is (see the file-level comment above for why) — then
+    # schedules the hourly/daily sync tiers and the nightly backup job — see worker/index.ts's
+    # schedule constants for exact times.
+    command: ["npm", "run", "worker"]
+    depends_on:
+      web:
+        condition: service_started
+      # Task 28 — belt-and-suspenders with `web`'s own dependency on `migrate`: `worker` is the
+      # sole writer of ESPN-derived data, so it must never start syncing against a stale schema
+      # either, independent of whatever order `web` happens to come up in.
+      migrate:
+        condition: service_completed_successfully
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    # ${CLOUDFLARE_TUNNEL_TOKEN} is substituted from the project's .env — docker compose loads
+    # that file automatically for variable substitution in this file, separately from the
+    # `env_file:` directive above (which injects vars into a container's own environment). See
+    # docs/RUNBOOK.md for exactly where this token comes from (Cloudflare Zero Trust dashboard).
+    command: tunnel run --token ${CLOUDFLARE_TUNNEL_TOKEN}
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    depends_on:
+      # Waits for web's healthcheck to pass, not just for the container to start — no point
+      # routing public traffic at a `web` that hasn't finished booting yet.
+      web:
+        condition: service_healthy

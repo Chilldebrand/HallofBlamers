@@ -1,0 +1,65 @@
+{
+  "//": "Example seed/franchises.json — copy this to seed/franchises.json and fill in real data.",
+  "//comment": [
+    "A 'franchise' is the durable identity stats are tracked against (AGENTS.md) — NOT an ESPN",
+    "teamId (which can be reused/reshuffled by ESPN across seasons) and NOT a manager (a franchise",
+    "can change hands and keep its history). This file is the ONLY source of franchise identity;",
+    "the normalizer never invents franchises from ESPN data. Run `npm run seed:suggest` after a",
+    "backfill to get a draft of this file grouped by owner SWID across every archived season.",
+    "",
+    "Resolution order (franchise-map.ts resolveFranchise): for a given (season, espnTeamId), first",
+    "an explicit entry in this franchise's `espnTeamIds`, then a manager whose `espnOwnerSwid`",
+    "matches one of that ESPN team's owners AND whose [fromSeason, toSeason] window covers the",
+    "season. A team that resolves neither way is a HARD validation failure for that season."
+  ],
+  "franchises": [
+    {
+      "id": 1,
+      "canonicalName": "Example Dynasty",
+      "managerName": "Jane Doe",
+      "joinedSeason": 2018,
+      "departedSeason": null,
+      "active": true,
+      "accentColor": "#4C6EF5",
+      "notes": "Founding member. Optional free-text.",
+      "managers": [
+        {
+          "managerName": "Jane Doe",
+          "espnOwnerSwid": "{ABCDE123-4567-89AB-CDEF-0123456789AB}",
+          "fromSeason": 2018,
+          "toSeason": null
+        }
+      ],
+      "espnTeamIds": [
+        { "season": 2018, "espnTeamId": 3 },
+        { "season": 2019, "espnTeamId": 3 },
+        { "season": 2020, "espnTeamId": 5 }
+      ]
+    },
+    {
+      "id": 2,
+      "canonicalName": "Traded Hands FC",
+      "managerName": "Current Manager",
+      "joinedSeason": 2018,
+      "departedSeason": null,
+      "active": true,
+      "accentColor": null,
+      "notes": "Example of a franchise that changed managers mid-history — both are listed, non-overlapping fromSeason/toSeason windows.",
+      "managers": [
+        {
+          "managerName": "Original Manager",
+          "espnOwnerSwid": "{11111111-2222-3333-4444-555555555555}",
+          "fromSeason": 2018,
+          "toSeason": 2021
+        },
+        {
+          "managerName": "Current Manager",
+          "espnOwnerSwid": "{66666666-7777-8888-9999-000000000000}",
+          "fromSeason": 2022,
+          "toSeason": null
+        }
+      ],
+      "espnTeamIds": [{ "season": 2018, "espnTeamId": 7 }]
+    }
+  ]
+}

@@ -1,0 +1,90 @@
+{
+  "version": "7",
+  "dialect": "sqlite",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "6",
+      "when": 1785812097988,
+      "tag": "0000_overjoyed_emma_frost",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1785823081860,
+      "tag": "0001_calm_quasimodo",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1785826863349,
+      "tag": "0002_bored_sandman",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1785834165374,
+      "tag": "0003_gorgeous_strong_guy",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1785850496540,
+      "tag": "0004_vengeful_fallen_one",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1785867564475,
+      "tag": "0005_flippant_korg",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1785870760429,
+      "tag": "0006_mushy_absorbing_man",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1785879723896,
+      "tag": "0007_add_achievements",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1785887147642,
+      "tag": "0008_first_reaper",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1785900000009,
+      "tag": "0009_colossal_zemo",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "6",
+      "when": 1785900000010,
+      "tag": "0010_add_pickem_picks",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "6",
+      "when": 1785900000011,
+      "tag": "0011_slot_scoring_calibration",
+      "breakpoints": true
+    }
+  ]
+}

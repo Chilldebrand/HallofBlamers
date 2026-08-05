@@ -1,0 +1,20 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`renderFallbackRecap — deterministic, no client involved > snapshot: matches the expected deterministic template shape 1`] = `
+"# Week 1 Recap
+
+_A deterministic recap generated without calling the API — every line here is read directly from that week's facts._
+
+## Standings
+1. Gridiron Gladiators — 1-0, 130.0 pts
+
+## Matchups
+### Gridiron Gladiators vs. Blue Thunder
+Final: Gridiron Gladiators 130.0 — Blue Thunder 100.0 (margin 30.0).
+
+## Superlatives
+- Top Score: Gridiron Gladiators, 130.0 pts.
+- Low Score: Gridiron Gladiators, 130.0 pts.
+- Closest Game: Gridiron Gladiators over Blue Thunder by 30.0.
+- Biggest Blowout: Gridiron Gladiators over Blue Thunder by 30.0."
+`;

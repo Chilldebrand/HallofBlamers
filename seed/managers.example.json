@@ -1,0 +1,16 @@
+{
+  "//": "Example seed/managers.json — copy this to seed/managers.json and fill in real data.",
+  "//comment": [
+    "Each row becomes an invite-link login. `npm run seed:managers` upserts by `name`: an existing",
+    "manager keeps their invite_token (so old links never break) and just gets franchiseId/role",
+    "refreshed; a new name gets a fresh crypto UUID token. The script prints every /join/<token>",
+    "link to the console — send each manager theirs.",
+    "",
+    "franchiseId must match an `id` in seed/franchises.json, or be null for a commissioner-only",
+    "account with no franchise of their own."
+  ],
+  "managers": [
+    { "name": "Jane Doe", "franchiseId": 1, "role": "commissioner" },
+    { "name": "John Smith", "franchiseId": 2, "role": "manager" }
+  ]
+}

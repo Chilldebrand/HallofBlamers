@@ -1,0 +1,28 @@
+# Docker build context exclusions (Task 15).
+#
+# IMPORTANT: `next build` with `output: "standalone"` copies any present
+# `.env*` file VERBATIM into `.next/standalone/.env` (confirmed empirically —
+# see Dockerfile's build-stage comment). If `.env` (real ESPN cookies,
+# SESSION_SECRET, ANTHROPIC_API_KEY) were present in the build context, it
+# would get baked into an image layer. Excluding it here means the build
+# stage's `next build` never sees an `.env` file to copy in the first place —
+# real secrets only ever reach the containers at RUNTIME, via docker-compose's
+# `env_file: .env` (a bind of the host file, never an image layer).
+.env
+.env.*
+!.env.example
+
+# Never ship the real database, backups, or any local data into an image —
+# these are runtime volume contents (`./data:/data`), not build inputs.
+data/
+
+# Local-only / not needed for a container build.
+node_modules/
+.next/
+.git/
+.superpowers/
+*.tsbuildinfo
+coverage/
+
+# Editor/OS noise.
+.DS_Store

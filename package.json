@@ -1,0 +1,51 @@
+{
+  "name": "hallofblamers",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "tsx src/server/db/migrate.ts",
+    "worker": "tsx worker/index.ts",
+    "backfill": "tsx src/server/espn/backfill.ts",
+    "normalize": "tsx src/server/sync/normalize-cli.ts",
+    "seed:suggest": "tsx src/server/sync/seed-suggest-cli.ts",
+    "seed:managers": "tsx src/server/auth/seed-managers-cli.ts",
+    "stats:build": "tsx src/server/stats/run-build.ts",
+    "winprob:backtest": "tsx src/server/stats/backtest-cli.ts",
+    "backup": "tsx src/server/db/backup-cli.ts",
+    "audit:identity": "node scripts/verify-identity.mjs"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.115.0",
+    "better-sqlite3": "^13.0.2",
+    "croner": "^10.0.1",
+    "drizzle-orm": "^0.45.2",
+    "jose": "^6.2.8",
+    "motion": "^12.43.0",
+    "next": "16.3.0",
+    "pino": "^10.3.1",
+    "react": "19.2.8",
+    "react-dom": "19.2.8"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4",
+    "@types/better-sqlite3": "^9.6.0",
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "drizzle-kit": "^0.31.10",
+    "eslint": "^9",
+    "eslint-config-next": "16.3.0",
+    "tailwindcss": "^4",
+    "tsx": "^4.23.5",
+    "typescript": "^5",
+    "vitest": "^4.1.10"
+  }
+}

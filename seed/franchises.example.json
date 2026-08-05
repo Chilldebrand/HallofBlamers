@@ -17,7 +17,7 @@
       "id": 1,
       "canonicalName": "Example Dynasty",
       "managerName": "Jane Doe",
-      "joinedSeason": 2018,
+      "joinedSeason": 2021,
       "departedSeason": null,
       "active": true,
       "accentColor": "#4C6EF5",
@@ -26,21 +26,21 @@
         {
           "managerName": "Jane Doe",
           "espnOwnerSwid": "{ABCDE123-4567-89AB-CDEF-0123456789AB}",
-          "fromSeason": 2018,
+          "fromSeason": 2021,
           "toSeason": null
         }
       ],
       "espnTeamIds": [
-        { "season": 2018, "espnTeamId": 3 },
-        { "season": 2019, "espnTeamId": 3 },
-        { "season": 2020, "espnTeamId": 5 }
+        { "season": 2021, "espnTeamId": 3 },
+        { "season": 2022, "espnTeamId": 3 },
+        { "season": 2023, "espnTeamId": 5 }
       ]
     },
     {
       "id": 2,
       "canonicalName": "Traded Hands FC",
       "managerName": "Current Manager",
-      "joinedSeason": 2018,
+      "joinedSeason": 2021,
       "departedSeason": null,
       "active": true,
       "accentColor": null,
@@ -49,17 +49,17 @@
         {
           "managerName": "Original Manager",
           "espnOwnerSwid": "{11111111-2222-3333-4444-555555555555}",
-          "fromSeason": 2018,
-          "toSeason": 2021
+          "fromSeason": 2021,
+          "toSeason": 2023
         },
         {
           "managerName": "Current Manager",
           "espnOwnerSwid": "{66666666-7777-8888-9999-000000000000}",
-          "fromSeason": 2022,
+          "fromSeason": 2024,
           "toSeason": null
         }
       ],
-      "espnTeamIds": [{ "season": 2018, "espnTeamId": 7 }]
+      "espnTeamIds": [{ "season": 2021, "espnTeamId": 7 }]
     }
   ]
 }

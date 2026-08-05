@@ -43,6 +43,10 @@ cd hallofblamers
 The rest of this section explains what those prompts are asking for, in case you want the detail
 or need to fill something in later.
 
+Before the first historical import, follow the private local-data workflow in
+[`HALLOFBLAMERS-BOOTSTRAP.md`](HALLOFBLAMERS-BOOTSTRAP.md). It keeps league mappings, corrections,
+credentials, and operational data out of Git.
+
 ### 1.2 Box timezone
 
 The worker's own schedule (hourly/daily sync, the 4:30am nightly backup) doesn't depend on the

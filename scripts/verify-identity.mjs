@@ -9,12 +9,20 @@ const banned = [
   new RegExp(["richey", "1406-prog"].join(""), "i"),
 ];
 
-const trackedFiles = execFileSync("git", ["ls-files", "-z"])
+const files = execFileSync("git", ["ls-files", "-z"])
   .toString("utf8")
   .split("\0")
   .filter((file) => file && !file.startsWith("docs/superpowers/"));
 
-const violations = trackedFiles.flatMap((file) => {
+const forbiddenTrackedPaths = new Set([
+  "seed/franchises.json",
+  "seed/managers.json",
+  "seed/corrections/corrections.json",
+]);
+const trackedData = files.filter((file) => forbiddenTrackedPaths.has(file));
+if (trackedData.length) throw new Error("Private league seed tracked: " + trackedData.join(", "));
+
+const violations = files.flatMap((file) => {
   const contents = readFileSync(file).toString("utf8");
   return banned
     .filter((pattern) => pattern.test(`${file}\n${contents}`))

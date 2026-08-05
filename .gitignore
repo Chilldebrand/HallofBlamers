@@ -51,3 +51,8 @@ data/
 .env
 .superpowers/
 .worktrees/
+
+# Hall of Blamers private league mappings and corrections
+seed/franchises.json
+seed/managers.json
+seed/corrections/corrections.json

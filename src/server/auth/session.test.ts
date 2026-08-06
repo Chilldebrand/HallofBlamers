@@ -1,11 +1,17 @@
 import { SignJWT } from "jose";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { createSessionToken, verifySessionToken } from "./session";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { createSessionToken, SESSION_COOKIE_NAME, SESSION_MAX_AGE_SECONDS, setSessionCookie, verifySessionToken } from "./session";
 
 const ORIGINAL_SECRET = process.env.SESSION_SECRET;
+const setCookie = vi.fn();
+
+vi.mock("next/headers", () => ({
+  cookies: async () => ({ set: setCookie }),
+}));
 
 beforeEach(() => {
   process.env.SESSION_SECRET = "a".repeat(32);
+  setCookie.mockReset();
 });
 
 afterEach(() => {
@@ -14,6 +20,8 @@ afterEach(() => {
   } else {
     process.env.SESSION_SECRET = ORIGINAL_SECRET;
   }
+
+  vi.unstubAllEnvs();
 });
 
 describe("createSessionToken / verifySessionToken", () => {
@@ -63,5 +71,35 @@ describe("createSessionToken / verifySessionToken", () => {
   it("throws when SESSION_SECRET is too short", async () => {
     process.env.SESSION_SECRET = "too-short";
     await expect(createSessionToken(1)).rejects.toThrow(/SESSION_SECRET/);
+  });
+});
+
+describe("setSessionCookie", () => {
+  it("sets an HTTP-compatible session cookie in development", async () => {
+    vi.stubEnv("NODE_ENV", "development");
+
+    await setSessionCookie(42);
+
+    expect(setCookie).toHaveBeenCalledWith(SESSION_COOKIE_NAME, expect.any(String), {
+      httpOnly: true,
+      secure: false,
+      sameSite: "lax",
+      maxAge: SESSION_MAX_AGE_SECONDS,
+      path: "/",
+    });
+  });
+
+  it("retains a secure session cookie in production", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+
+    await setSessionCookie(42);
+
+    expect(setCookie).toHaveBeenCalledWith(SESSION_COOKIE_NAME, expect.any(String), {
+      httpOnly: true,
+      secure: true,
+      sameSite: "lax",
+      maxAge: SESSION_MAX_AGE_SECONDS,
+      path: "/",
+    });
   });
 });

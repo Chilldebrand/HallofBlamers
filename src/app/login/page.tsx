@@ -21,7 +21,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
         There&apos;s no password here. Every league member gets a personal invite link from the
         commissioner — open it once on any device and you&apos;re signed in for the season.
       </p>
-      <p className="text-sm text-muted">Lost your link, or need one for the first time? Ask Richey.</p>
+      <p className="text-sm text-muted">Lost your link, or need one for the first time? Ask the commissioner.</p>
     </div>
   );
 }

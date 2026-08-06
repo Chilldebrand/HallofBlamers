@@ -400,6 +400,59 @@ describe("normalizeSeason / normalizeAll", () => {
       });
     });
 
+    it("recovers an itemless trade from covered before/after rosters and marks every recovered item inferred", () => {
+      const week2 = buildWeekScopePayload(2) as {
+        schedule: Array<{
+          matchupPeriodId: number;
+          home: { teamId: number; rosterForCurrentScoringPeriod?: { entries: unknown[] } };
+          away: { teamId: number; rosterForCurrentScoringPeriod?: { entries: unknown[] } };
+        }>;
+      };
+      const sides = week2.schedule
+        .filter((entry) => entry.matchupPeriodId === 2)
+        .flatMap((entry) => [entry.home, entry.away]);
+      const team2 = sides.find((side) => side.teamId === 2)!;
+      const team3 = sides.find((side) => side.teamId === 3)!;
+      const team2Entries = team2.rosterForCurrentScoringPeriod!.entries;
+      team2.rosterForCurrentScoringPeriod!.entries = team3.rosterForCurrentScoringPeriod!.entries;
+      team3.rosterForCurrentScoringPeriod!.entries = team2Entries;
+      storeSnapshot(db, {
+        season: FIXTURE_SEASON,
+        scoringPeriod: 2,
+        view: WEEK_SCOPE_VIEW_KEY,
+        url: "https://example.com/week2-trade",
+        httpStatus: 200,
+        payload: JSON.stringify(week2),
+      });
+
+      const echoes = [
+        { id: "echo-a", relatedTransactionId: "logical-trade", type: "TRADE_UPHOLD", status: "EXECUTED", teamId: 2, scoringPeriodId: 2 },
+        { id: "echo-b", relatedTransactionId: "logical-trade", type: "TRADE_UPHOLD", status: "EXECUTED", teamId: 3, scoringPeriodId: 2 },
+      ];
+      for (const period of [1, 2]) {
+        storeSnapshot(db, {
+          season: FIXTURE_SEASON,
+          scoringPeriod: period,
+          view: TRANSACTIONS_VIEW_KEY,
+          url: `https://example.com/tx${period}`,
+          httpStatus: 200,
+          payload: JSON.stringify(buildTransactionsPeriodPayload(period, echoes)),
+        });
+      }
+
+      const summary = normalizeSeason(db, FIXTURE_SEASON, { franchiseSeed: buildFranchiseSeed(), leagueId: FIXTURE_LEAGUE_ID });
+      const canonical = db.select().from(transactions).where(eq(transactions.espnTxId, "echo-a")).get()!;
+      const recovered = db.select().from(transactionItems).where(eq(transactionItems.transactionId, canonical.id)).all();
+
+      expect(summary.written.transaction_items_inferred).toBe(4);
+      expect(recovered).toHaveLength(4);
+      expect(recovered.every((item) => item.source === "inferred")).toBe(true);
+      expect(recovered).toContainEqual(expect.objectContaining({ playerId: 5101, action: "trade_away" }));
+      expect(recovered).toContainEqual(expect.objectContaining({ playerId: 5101, action: "trade_for" }));
+      expect(recovered).toContainEqual(expect.objectContaining({ playerId: 5201, action: "trade_away" }));
+      expect(recovered).toContainEqual(expect.objectContaining({ playerId: 5201, action: "trade_for" }));
+    });
+
     it("does not create a row for an unexecuted transaction (e.g. a pending TRADE_PROPOSAL)", () => {
       storeSnapshot(db, {
         season: FIXTURE_SEASON,

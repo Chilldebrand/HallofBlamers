@@ -13,7 +13,15 @@
  * `franchise_managers` come from `seed/franchises.json` (franchise-map.ts),
  * never from ESPN.
  */
-import { eq, inArray, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, sql } from "drizzle-orm";
+import {
+  excludeLoneLegs,
+  inferTradeItemsFromRosterDiff,
+  keepDominantBlock,
+  keepDominantComponent,
+  type InferredTradeItem,
+  type RosterEntry,
+} from "../../engines/tradeRosterDiff";
 import type { Db } from "../db/client";
 import {
   draftPicks,
@@ -217,6 +225,9 @@ export function normalizeSeason(db: Db, season: number, opts?: NormalizeOptions)
       const txResult = insertTransactions(tx, season, txs, teamSeasonIdByEspnId, warnings);
       w.transactions = txResult.transactions;
       w.transaction_items = txResult.items;
+      const inferredItems = recoverItemlessTrades(tx, season, txs, teamSeasonIdByEspnId, warnings);
+      w.transaction_items += inferredItems;
+      if (inferredItems > 0) w.transaction_items_inferred = inferredItems;
 
       w.draft_picks = insertDraftPicks(tx, season, picks, teamSeasonIdByEspnId, warnings);
 
@@ -1217,7 +1228,7 @@ function insertTransactions(
           warnings.push(`transaction ${espnTxId}: item team ${espnTeamId} has no team_season row, skipped`);
           continue;
         }
-        tx.insert(transactionItems).values({ transactionId: row.id, teamSeasonId, playerId, action }).run();
+        tx.insert(transactionItems).values({ transactionId: row.id, teamSeasonId, playerId, action, source: "espn" }).run();
         itemCount++;
       }
     }
@@ -1233,6 +1244,147 @@ function insertTransactions(
   }
 
   return { transactions: txCount, items: itemCount };
+}
+
+const TRADE_RECORD_TYPES = new Set(["TRADE_PROPOSAL", "TRADE_ACCEPT", "TRADE_UPHOLD", "TRADE_VETO", "TRADE_DECLINE"]);
+const TRADE_ANCHOR_TYPES = new Set(["TRADE_PROPOSAL", "TRADE_ACCEPT"]);
+
+function tradeGroupKey(transaction: EspnTransaction): string | null {
+  const related = transaction.relatedTransactionId;
+  if (related !== undefined && related !== null) return String(related);
+  if (transaction.id !== undefined && transaction.id !== null) return String(transaction.id);
+  return null;
+}
+
+function hasIndependentMove(
+  tx: Db,
+  canonicalTransactionId: number,
+  playerId: number,
+  teamSeasonId: number,
+  actions: readonly TransactionItem["action"][],
+): boolean {
+  return tx
+    .select({ id: transactionItems.id })
+    .from(transactionItems)
+    .where(
+      and(
+        eq(transactionItems.playerId, playerId),
+        eq(transactionItems.teamSeasonId, teamSeasonId),
+        inArray(transactionItems.action, actions),
+        sql`${transactionItems.transactionId} <> ${canonicalTransactionId}`,
+      ),
+    )
+    .limit(1)
+    .get() !== undefined;
+}
+
+function recoverItemlessTrades(
+  tx: Db,
+  season: number,
+  rawTransactions: EspnTransaction[],
+  teamSeasonIdByEspnId: Map<number, number>,
+  warnings: string[],
+): number {
+  const orphanRows = tx
+    .select({ id: transactions.id, espnTxId: transactions.espnTxId })
+    .from(transactions)
+    .leftJoin(transactionItems, eq(transactionItems.transactionId, transactions.id))
+    .where(and(eq(transactions.season, season), eq(transactions.type, "trade"), isNull(transactionItems.id)))
+    .all();
+  if (orphanRows.length === 0) return 0;
+
+  const rawById = new Map<string, EspnTransaction>();
+  for (const raw of rawTransactions) {
+    if (raw.id !== undefined && raw.id !== null) rawById.set(String(raw.id), raw);
+  }
+
+  const rowsByGroup = new Map<string, typeof orphanRows>();
+  for (const row of orphanRows) {
+    const raw = rawById.get(row.espnTxId);
+    const key = raw ? tradeGroupKey(raw) : null;
+    if (!key) continue;
+    const rows = rowsByGroup.get(key);
+    if (rows) rows.push(row);
+    else rowsByGroup.set(key, [row]);
+  }
+
+  const coveredPeriods = new Set(periodsWithSnapshot(tx, season, TRANSACTIONS_VIEW_KEY));
+  let inserted = 0;
+
+  for (const [groupKey, groupRows] of rowsByGroup) {
+    const related = rawTransactions.filter((raw) => {
+      const id = raw.id === undefined || raw.id === null ? null : String(raw.id);
+      return id === groupKey || tradeGroupKey(raw) === groupKey;
+    });
+    if (related.some((raw) => Array.isArray(raw.items) && raw.items.length > 0)) continue;
+
+    const weeks = new Set(related.map((raw) => asFiniteNumber(raw.scoringPeriodId)).filter((week): week is number => week !== undefined));
+    if (weeks.size !== 1) {
+      warnings.push(`season ${season}: recovered trade group ${groupKey} has no single scoring period; left incomplete`);
+      continue;
+    }
+    const week = [...weeks][0]!;
+    if (week <= 1 || !coveredPeriods.has(week - 1) || !coveredPeriods.has(week)) {
+      warnings.push(`season ${season}: recovered trade group ${groupKey} lacks complete adjacent transaction snapshots; roster inference skipped`);
+      continue;
+    }
+
+    const candidateEspnTeamIds = new Set<number>();
+    const anchorTeamSeasonIds = new Set<number>();
+    for (const raw of related) {
+      const type = typeof raw.type === "string" ? raw.type.toUpperCase() : null;
+      const espnTeamId = asFiniteNumber(raw.teamId);
+      if (espnTeamId === undefined || (type !== null && !TRADE_RECORD_TYPES.has(type))) continue;
+      candidateEspnTeamIds.add(espnTeamId);
+      if (type !== null && TRADE_ANCHOR_TYPES.has(type)) {
+        const teamSeasonId = teamSeasonIdByEspnId.get(espnTeamId);
+        if (teamSeasonId !== undefined) anchorTeamSeasonIds.add(teamSeasonId);
+      }
+    }
+    const candidateTeamSeasonIds = [...candidateEspnTeamIds]
+      .map((espnTeamId) => teamSeasonIdByEspnId.get(espnTeamId))
+      .filter((teamSeasonId): teamSeasonId is number => teamSeasonId !== undefined);
+    if (candidateTeamSeasonIds.length < 2) {
+      warnings.push(`season ${season}: recovered trade group ${groupKey} has fewer than two resolvable candidate teams; left incomplete`);
+      continue;
+    }
+
+    const before: RosterEntry[] = tx
+      .select({ teamSeasonId: rosterSlots.teamSeasonId, playerId: rosterSlots.playerId })
+      .from(rosterSlots)
+      .where(and(eq(rosterSlots.season, season), eq(rosterSlots.week, week - 1), inArray(rosterSlots.teamSeasonId, candidateTeamSeasonIds)))
+      .all();
+    const after: RosterEntry[] = tx
+      .select({ teamSeasonId: rosterSlots.teamSeasonId, playerId: rosterSlots.playerId })
+      .from(rosterSlots)
+      .where(and(eq(rosterSlots.season, season), eq(rosterSlots.week, week), inArray(rosterSlots.teamSeasonId, candidateTeamSeasonIds)))
+      .all();
+
+    const canonical = groupRows.reduce((lowest, row) => row.id < lowest.id ? row : lowest, groupRows[0]!);
+    let inferred: InferredTradeItem[] = inferTradeItemsFromRosterDiff(before, after).filter((item) => {
+      const departureExplained = hasIndependentMove(tx, canonical.id, item.playerId, item.fromTeamSeasonId, ["drop", "trade_away"]);
+      const arrivalExplained = hasIndependentMove(tx, canonical.id, item.playerId, item.toTeamSeasonId, ["add", "trade_for"]);
+      return !(departureExplained && arrivalExplained);
+    });
+    inferred = keepDominantComponent(excludeLoneLegs(inferred), anchorTeamSeasonIds);
+    inferred = keepDominantBlock(inferred, anchorTeamSeasonIds);
+    if (inferred.length === 0) {
+      warnings.push(`season ${season}: recovered trade group ${groupKey} had no defensible roster exchange; left incomplete`);
+      continue;
+    }
+
+    for (const item of inferred) {
+      tx.insert(transactionItems)
+        .values({ transactionId: canonical.id, teamSeasonId: item.fromTeamSeasonId, playerId: item.playerId, action: "trade_away", source: "inferred" })
+        .run();
+      tx.insert(transactionItems)
+        .values({ transactionId: canonical.id, teamSeasonId: item.toTeamSeasonId, playerId: item.playerId, action: "trade_for", source: "inferred" })
+        .run();
+      inserted += 2;
+    }
+  }
+
+  return inserted;
 }
 
 // ---------------------------------------------------------------------------

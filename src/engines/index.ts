@@ -10,3 +10,7 @@ export * from "./lineupHoles";
 export * from "./pickem";
 export * from "./winProbability";
 export * from "./winProbabilityBacktest";
+export * from "./rosterPossession";
+export * from "./waiverROI";
+export * from "./tradeRosterDiff";
+export * from "./tradeAnalytics";

@@ -147,6 +147,9 @@ export interface EspnTransaction {
   /** Never observed in real data — kept as a defensive fallback per the brief's field list. */
   executionDate?: unknown;
   items?: EspnTransactionItem[];
+  scoringPeriodId?: unknown;
+  teamId?: unknown;
+  relatedTransactionId?: unknown;
 }
 
 /** Top-level shape of a per-period `view=mTransactions2&scoringPeriodId=N` response. */

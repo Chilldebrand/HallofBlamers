@@ -11,15 +11,15 @@
 # ---------------------------------------------------------------------------
 # Stage 1: deps — installs node_modules INSIDE the Linux container.
 # ---------------------------------------------------------------------------
-FROM node:22-slim AS deps
+FROM node:24-slim AS deps
 WORKDIR /app
 
 # better-sqlite3 ships prebuilt native binaries (via `prebuild-install`) for common platforms,
-# including linux-x64-glibc — exactly what `node:22-slim` (Debian) is, so `npm ci` below fetches
+# including linux-x64-glibc — exactly what `node:24-slim` (Debian) is, so `npm ci` below fetches
 # a matching prebuild automatically; no compilation happens in the common case. python3/make/g++
 # are installed anyway as a fallback so the install still succeeds (compiling from source) on the
 # rare chance npm's prebuild mirror is unreachable — this layer never reaches the runtime image
-# (see the `runtime` stage below, which starts fresh from `node:22-slim` and copies in only
+# (see the `runtime` stage below, which starts fresh from `node:24-slim` and copies in only
 # specific files), so it costs nothing at deploy time.
 RUN apt-get update && apt-get install -y --no-install-recommends python3 make g++ \
     && rm -rf /var/lib/apt/lists/*
@@ -46,10 +46,10 @@ COPY . .
 RUN npm run build
 
 # ---------------------------------------------------------------------------
-# Stage 3: runtime — the shipped image. Starts fresh from node:22-slim (none of the `deps`/`build`
+# Stage 3: runtime — the shipped image. Starts fresh from node:24-slim (none of the `deps`/`build`
 # stages' apt packages or source tree carry over except what's explicitly COPY'd below).
 # ---------------------------------------------------------------------------
-FROM node:22-slim AS runtime
+FROM node:24-slim AS runtime
 WORKDIR /app
 ENV NODE_ENV=production
 

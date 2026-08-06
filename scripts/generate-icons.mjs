@@ -24,7 +24,7 @@ function regularSvg(size) {
   <rect width="${size}" height="${size}" fill="${CHROME_DEEP}"/>
   <circle cx="${size / 2}" cy="${cy}" r="${r1}" fill="none" stroke="${GOLD}" stroke-width="${size * 0.043}"/>
   <circle cx="${size / 2}" cy="${cy}" r="${r2}" fill="${CHROME}" stroke="${GOLD}" stroke-width="${size * 0.008}"/>
-  <text x="${size / 2}" y="${textY}" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-weight="800" font-size="${fontSize}" letter-spacing="${size * 0.004}" fill="${CREAM}">WBB</text>
+  <text x="${size / 2}" y="${textY}" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-weight="800" font-size="${fontSize}" letter-spacing="${size * 0.004}" fill="${CREAM}">HOB</text>
 </svg>`;
 }
 
@@ -38,7 +38,7 @@ function maskableSvg(size) {
   <rect width="${size}" height="${size}" fill="${CHROME_DEEP}"/>
   <circle cx="${size / 2}" cy="${cy}" r="${r1}" fill="none" stroke="${GOLD}" stroke-width="${size * 0.031}"/>
   <circle cx="${size / 2}" cy="${cy}" r="${r2}" fill="${CHROME}" stroke="${GOLD}" stroke-width="${size * 0.006}"/>
-  <text x="${size / 2}" y="${textY}" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-weight="800" font-size="${fontSize}" letter-spacing="${size * 0.003}" fill="${CREAM}">WBB</text>
+  <text x="${size / 2}" y="${textY}" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-weight="800" font-size="${fontSize}" letter-spacing="${size * 0.003}" fill="${CREAM}">HOB</text>
 </svg>`;
 }
 

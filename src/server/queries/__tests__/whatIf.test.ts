@@ -134,6 +134,7 @@ describe("DB-facing", () => {
       .values([
         { season: 2016, leagueId: league.id, settingsJson: {}, scoringJson: {}, playoffFormatJson: {}, teamCount: 4, regSeasonWeeks: 3, status: "complete" }, // pre-2018: no lineup data
         { season: 2019, leagueId: league.id, settingsJson: {}, scoringJson: {}, playoffFormatJson: {}, teamCount: 4, regSeasonWeeks: 3, status: "complete" }, // has the 187.7 outlier + an in-progress future week
+        { season: 2020, leagueId: league.id, settingsJson: {}, scoringJson: {}, playoffFormatJson: {}, teamCount: 2, regSeasonWeeks: 1, status: "complete" }, // deliberately one-sided schedule coverage
       ])
       .run();
 
@@ -157,6 +158,8 @@ describe("DB-facing", () => {
     const tsA2019 = ts(2019, franchiseA, 1);
     const tsB2019 = ts(2019, franchiseB, 2);
     const tsC2019 = ts(2019, franchiseC, 3);
+    const tsA2020 = ts(2020, franchiseA, 1);
+    const tsB2020 = ts(2020, franchiseB, 2);
 
     const build = db.insert(statBuilds).values({ startedAt: new Date(), inputHash: "test", status: "ok" }).returning().get();
     const buildId = build.id;
@@ -169,6 +172,15 @@ describe("DB-facing", () => {
         { buildId, season: 2016, week: 1, weekType: "regular", teamSeasonId: tsB2016, franchiseId: franchiseB, opponentFranchiseId: franchiseA, score: 90, result: "L", margin: -10, optimalScore: null },
         { buildId, season: 2016, week: 2, weekType: "regular", teamSeasonId: tsA2016, franchiseId: franchiseA, opponentFranchiseId: franchiseC, score: 88, result: "L", margin: -5, optimalScore: null },
         { buildId, season: 2016, week: 2, weekType: "regular", teamSeasonId: tsC2016, franchiseId: franchiseC, opponentFranchiseId: franchiseA, score: 93, result: "W", margin: 5, optimalScore: null },
+      ])
+      .run();
+
+    // 2020: both teams have a row, but only Alpha claims the head-to-head. Bravo is incorrectly
+    // shaped as a bye. Query validation must reject the season instead of treating it as complete.
+    db.insert(teamWeek)
+      .values([
+        { buildId, season: 2020, week: 1, weekType: "regular", teamSeasonId: tsA2020, franchiseId: franchiseA, opponentFranchiseId: franchiseB, score: 100, result: "W", margin: 10, optimalScore: 110 },
+        { buildId, season: 2020, week: 1, weekType: "regular", teamSeasonId: tsB2020, franchiseId: franchiseB, opponentFranchiseId: null, score: 90, result: null, margin: null, optimalScore: 95 },
       ])
       .run();
 
@@ -189,6 +201,7 @@ describe("DB-facing", () => {
         // week 3: A scores the real outlier (187.7) against B. B's optimal (200) beats A's real 187.7.
         { buildId, season: 2019, week: 3, weekType: "regular", teamSeasonId: tsA2019, franchiseId: franchiseA, opponentFranchiseId: franchiseB, score: 187.7, result: "W", margin: 87.7, optimalScore: 190 },
         { buildId, season: 2019, week: 3, weekType: "regular", teamSeasonId: tsB2019, franchiseId: franchiseB, opponentFranchiseId: franchiseA, score: 100, result: "L", margin: -87.7, optimalScore: 200 },
+        { buildId, season: 2019, week: 3, weekType: "regular", teamSeasonId: tsC2019, franchiseId: franchiseC, opponentFranchiseId: null, score: 0, result: null, margin: null, optimalScore: null },
         // week 4: an UNDECIDED future matchup (ESPN sentinel: winner UNDECIDED -> result null,
         // score defaults to 0) — must be excluded entirely, not read as "A lost 0-105."
         { buildId, season: 2019, week: 4, weekType: "regular", teamSeasonId: tsA2019, franchiseId: franchiseA, opponentFranchiseId: franchiseB, score: 0, result: null, margin: null, optimalScore: null },
@@ -243,6 +256,13 @@ describe("DB-facing", () => {
     it("returns null for a franchise absent from the season (Delta never played 2019)", () => {
       expect(getScheduleSwapResult(2019, franchiseA, franchiseD)).toBeNull();
     });
+  });
+
+  it("rejects a query season with one-sided matchup coverage", () => {
+    expect(getScheduleSwapResult(2020, franchiseA, franchiseB)).toBeNull();
+    const page = getWhatIfPageData({ mode: "swap", season: "2020", franchiseA: String(franchiseA), franchiseB: String(franchiseB) });
+    expect(page.available).toBe(false);
+    expect(page.unavailableReason).toMatch(/coverage/i);
   });
 
   describe("getBestWorstScheduleResult — 2019", () => {

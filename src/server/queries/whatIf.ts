@@ -3,6 +3,7 @@ import {
   bestWorstSchedule,
   optimalLineupSeason,
   scheduleSwap,
+  validateWhatIfScheduleCoverage,
   type BestWorstScheduleResult,
   type OptimalLineupSeasonResult,
   type OptimalLineupWeekInput,
@@ -173,7 +174,12 @@ function loadRegularSeasonRows(db: Db, season: number): RawTeamWeekRow[] {
 /** Regular-season-only weekly inputs, keyed by franchise — feeds Schedule Swap and
  * Best/Worst Schedule (see src/engines/whatIf.ts's module docstring for why those two modes are
  * scoped to the regular season: playoff pairings are seeded, not a fixed schedule). */
-function buildRegularSeasonWeekInputs(season: number): Map<number, WhatIfWeekInput[]> {
+interface RegularSeasonWeekInputs {
+  byFranchise: Map<number, WhatIfWeekInput[]>;
+  coverage: ReturnType<typeof validateWhatIfScheduleCoverage>;
+}
+
+function buildRegularSeasonWeekInputs(season: number): RegularSeasonWeekInputs {
   const db = getDb();
   const rows = loadRegularSeasonRows(db, season);
   const scoreIndex = buildScoreIndex(rows);
@@ -185,7 +191,11 @@ function buildRegularSeasonWeekInputs(season: number): Map<number, WhatIfWeekInp
     list.push({ week: r.week, ownScore: r.score, opponentFranchiseId, opponentScore });
     byFranchise.set(r.franchiseId, list);
   }
-  return byFranchise;
+  const coverage = validateWhatIfScheduleCoverage(
+    [...byFranchise.entries()].map(([franchiseId, weeks]) => ({ franchiseId, weeks })),
+    true,
+  );
+  return { byFranchise, coverage };
 }
 
 // ---------------------------------------------------------------------------
@@ -195,7 +205,8 @@ function buildRegularSeasonWeekInputs(season: number): Map<number, WhatIfWeekInp
 /** Null when either franchise has no regular-season team_week rows for this season (shouldn't
  * happen once the picker only offers season-scoped options, but stays honest rather than crash). */
 export function getScheduleSwapResult(season: number, franchiseAId: number, franchiseBId: number): ScheduleSwapResult | null {
-  const byFranchise = buildRegularSeasonWeekInputs(season);
+  const { byFranchise, coverage } = buildRegularSeasonWeekInputs(season);
+  if (!coverage.available) return null;
   const weeksA = byFranchise.get(franchiseAId);
   const weeksB = byFranchise.get(franchiseBId);
   if (!weeksA || !weeksB) return null;
@@ -207,7 +218,8 @@ export function getScheduleSwapResult(season: number, franchiseAId: number, fran
 // ---------------------------------------------------------------------------
 
 export function getBestWorstScheduleResult(season: number, franchiseId: number): BestWorstScheduleResult | null {
-  const byFranchise = buildRegularSeasonWeekInputs(season);
+  const { byFranchise, coverage } = buildRegularSeasonWeekInputs(season);
+  if (!coverage.available) return null;
   const ownWeeks = byFranchise.get(franchiseId);
   if (!ownWeeks) return null;
 
@@ -315,6 +327,18 @@ export function getWhatIfPageData(params: WhatIfPageParams): WhatIfPageData {
   }
 
   if (mode === "swap") {
+    const scheduleCoverage = buildRegularSeasonWeekInputs(season).coverage;
+    if (!scheduleCoverage.available) {
+      return {
+        available: false,
+        unavailableReason: scheduleCoverage.unavailableReason,
+        mode,
+        season,
+        seasonOptions,
+        franchiseOptions,
+        result: null,
+      };
+    }
     const pair = resolveWhatIfFranchisePair(params.franchiseA, params.franchiseB, franchiseOptions);
     const value = getScheduleSwapResult(season, pair.franchiseAId, pair.franchiseBId);
     return {

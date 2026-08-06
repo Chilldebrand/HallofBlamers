@@ -395,7 +395,7 @@ function computePlayoffOddsRows(db: Db, buildId: number, eloHistoryRows: NewEloH
   const teamSeasonRows = db.select({ id: teamSeasons.id, season: teamSeasons.season, franchiseId: teamSeasons.franchiseId, wins: teamSeasons.wins, losses: teamSeasons.losses, ties: teamSeasons.ties, pointsFor: teamSeasons.pointsFor }).from(teamSeasons).all();
   const franchiseByTeamSeason = new Map(teamSeasonRows.map((t) => [t.id, t.franchiseId]));
   const matchupRows = db.select().from(matchups).all();
-  const weekRows = db.select({ season: weeks.season, week: weeks.week, weekType: weeks.weekType }).from(weeks).all();
+  const weekRows = db.select({ season: weeks.season, week: weeks.week, weekType: weeks.weekType, isComplete: weeks.isComplete }).from(weeks).all();
   const regularWeekSet = new Set(weekRows.filter((w) => w.weekType === "regular").map((w) => `${w.season}:${w.week}`));
 
   const calibrationSamples = buildEloCalibrationSamplesInMemory(eloHistoryRows, matchupRows, franchiseByTeamSeason);
@@ -419,6 +419,28 @@ function computePlayoffOddsRows(db: Db, buildId: number, eloHistoryRows: NewEloH
       .filter((m) => m.season === season.season && !m.isFinal && m.awayTeamSeasonId !== null && regularWeekSet.has(`${m.season}:${m.week}`))
       .map((m) => ({ homeFranchiseId: franchiseByTeamSeason.get(m.homeTeamSeasonId)!, awayFranchiseId: franchiseByTeamSeason.get(m.awayTeamSeasonId!)! }))
       .filter((m) => m.homeFranchiseId !== undefined && m.awayFranchiseId !== undefined);
+
+    if (remainingMatchups.length === 0) {
+      const regularWeeks = weekRows.filter((week) => week.season === season.season && week.weekType === "regular");
+      const uniqueRegularWeeks = new Set(regularWeeks.map((week) => week.week));
+      const expectedMatchupsPerWeek = Math.floor(standings.length / 2);
+      const hasCompleteWeeks =
+        season.regSeasonWeeks > 0 &&
+        uniqueRegularWeeks.size === season.regSeasonWeeks &&
+        regularWeeks.every((week) => week.isComplete);
+      const hasCompleteMatchups = [...uniqueRegularWeeks].every((week) => {
+        const scheduled = matchupRows.filter(
+          (matchup) => matchup.season === season.season && matchup.week === week && matchup.awayTeamSeasonId !== null,
+        );
+        return scheduled.length === expectedMatchupsPerWeek && scheduled.every((matchup) => matchup.isFinal);
+      });
+      if (!hasCompleteWeeks || !hasCompleteMatchups) {
+        warnings.push(
+          `stage 9 (playoff odds): season ${season.season} has no remaining schedule but lacks independent regular-season completion proof — skipped`,
+        );
+        continue;
+      }
+    }
 
     const eloByFranchise = resolveCurrentEloByFranchise(eloHistoryRows, season.season, standings.map((s) => s.franchiseId));
 
@@ -478,7 +500,7 @@ function computePlayoffOddsRows(db: Db, buildId: number, eloHistoryRows: NewEloH
  * very first build to include slot_scoring_stats needs to run automatically on the next
  * `stats:build`, not require a manual `--force`.
  */
-const STAT_ENGINE_VERSION = 4;
+const STAT_ENGINE_VERSION = 5;
 
 /**
  * Per source table: row count + max rowid + a cheap content aggregate, so real data changes (not

@@ -29,6 +29,56 @@ export interface WhatIfWeekInput {
   opponentScore: number | null;
 }
 
+export interface WhatIfScheduleCoverageResult {
+  available: boolean;
+  unavailableReason: string | null;
+}
+
+/** Proves that every supplied franchise covers the same weeks and that every in-scope matchup is
+ * reciprocal. Query callers pass `requireAllOpponents=true` with the full season field; the public
+ * two-franchise adapter validates reciprocal head-to-head rows without pretending it can prove
+ * opponents that were not supplied. */
+export function validateWhatIfScheduleCoverage(
+  franchiseSchedules: { franchiseId: number; weeks: WhatIfWeekInput[] }[],
+  requireAllOpponents = false,
+): WhatIfScheduleCoverageResult {
+  if (franchiseSchedules.length === 0 || franchiseSchedules.some((entry) => entry.weeks.length === 0)) {
+    return { available: false, unavailableReason: "Complete schedule coverage is unavailable for this season." };
+  }
+
+  const expectedWeeks = new Set(franchiseSchedules[0]!.weeks.map((week) => week.week));
+  const franchiseIds = new Set(franchiseSchedules.map((entry) => entry.franchiseId));
+  const rows = new Map<string, WhatIfWeekInput>();
+  for (const entry of franchiseSchedules) {
+    const weeks = new Set(entry.weeks.map((week) => week.week));
+    if (weeks.size !== entry.weeks.length || weeks.size !== expectedWeeks.size || [...expectedWeeks].some((week) => !weeks.has(week))) {
+      return { available: false, unavailableReason: "Expected week coverage is incomplete or duplicated for this season." };
+    }
+    for (const week of entry.weeks) rows.set(`${entry.franchiseId}:${week.week}`, week);
+  }
+
+  for (const entry of franchiseSchedules) {
+    for (const week of entry.weeks) {
+      if ((week.opponentFranchiseId === null) !== (week.opponentScore === null)) {
+        return { available: false, unavailableReason: "Reciprocal schedule coverage is incomplete for this season." };
+      }
+      if (week.opponentFranchiseId === null) continue;
+      if (!requireAllOpponents && !franchiseIds.has(week.opponentFranchiseId)) continue;
+      const opponent = rows.get(`${week.opponentFranchiseId}:${week.week}`);
+      if (
+        !opponent ||
+        opponent.opponentFranchiseId !== entry.franchiseId ||
+        opponent.ownScore !== week.opponentScore ||
+        opponent.opponentScore !== week.ownScore
+      ) {
+        return { available: false, unavailableReason: "Reciprocal schedule coverage is incomplete for this season." };
+      }
+    }
+  }
+
+  return { available: true, unavailableReason: null };
+}
+
 export type WhatIfResultLetter = "W" | "L" | "T";
 
 function decide(own: number, opp: number): WhatIfResultLetter {
@@ -276,6 +326,8 @@ export interface OptimalLineupSeasonResult {
 
 export const PRE_OPTIMAL_LINEUP_DATA_REASON =
   "No lineup data is archived for every decided week in this season, so Perfect Lineups can't be computed honestly.";
+export const NO_DECIDED_LINEUP_GAMES_REASON =
+  "No decided games with an opponent are archived for this season, so Perfect Lineups is unavailable.";
 
 /** Season record if `franchiseId` had started its optimal lineup every week — opponents keep
  * their real actual scores (honest baseline: nobody else is optimized either). Regular season +
@@ -283,6 +335,10 @@ export const PRE_OPTIMAL_LINEUP_DATA_REASON =
  * `optimalScore` is refused wholesale rather than silently under-counted. */
 export function optimalLineupSeason(season: number, franchiseId: number, weeks: OptimalLineupWeekInput[]): OptimalLineupSeasonResult {
   const playable = weeks.filter((w): w is OptimalLineupWeekInput & { opponentFranchiseId: number; opponentScore: number } => w.opponentFranchiseId !== null && w.opponentScore !== null);
+
+  if (playable.length === 0) {
+    return { season, franchiseId, available: false, unavailableReason: NO_DECIDED_LINEUP_GAMES_REASON, record: null };
+  }
 
   if (playable.some((w) => w.optimalScore === null)) {
     return { season, franchiseId, available: false, unavailableReason: PRE_OPTIMAL_LINEUP_DATA_REASON, record: null };
@@ -346,8 +402,12 @@ export function runWhatIfScenario(
   input: WhatIfScenarioInput,
 ): WhatIfScenarioEnvelope<ScheduleSwapResult | BestWorstScheduleResult | OptimalLineupSeasonResult> {
   if (input.mode === "schedule-swap") {
-    if (input.weeksA.length === 0 || input.weeksB.length === 0) {
-      return { available: false, unavailableReason: "Both franchises need archived schedule data for this season.", result: null };
+    const coverage = validateWhatIfScheduleCoverage([
+      { franchiseId: input.franchiseAId, weeks: input.weeksA },
+      { franchiseId: input.franchiseBId, weeks: input.weeksB },
+    ]);
+    if (!coverage.available) {
+      return { available: false, unavailableReason: coverage.unavailableReason, result: null };
     }
     return {
       available: true,
@@ -362,5 +422,7 @@ export function runWhatIfScenario(
   }
 
   const result = optimalLineupSeason(input.season, input.franchiseId, input.weeks);
-  return { available: result.available, unavailableReason: result.unavailableReason, result };
+  return result.available
+    ? { available: true, unavailableReason: null, result }
+    : { available: false, unavailableReason: result.unavailableReason, result: null };
 }

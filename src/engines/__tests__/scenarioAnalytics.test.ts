@@ -106,4 +106,33 @@ describe("deterministic scenario analytics", () => {
     expect(lineup.available).toBe(true);
     expect(lineup.result?.record?.pointsFor).toBe(112);
   });
+
+  it("refuses empty and bye-only perfect-lineup scenarios instead of returning an available 0-0", () => {
+    const empty = runWhatIfScenario({ mode: "perfect-lineup", season: 2024, franchiseId: 1, weeks: [] });
+    const byeOnly = runWhatIfScenario({
+      mode: "perfect-lineup",
+      season: 2024,
+      franchiseId: 1,
+      weeks: [{ week: 1, actualScore: 0, optimalScore: null, opponentFranchiseId: null, opponentScore: null }],
+    });
+
+    expect(empty).toMatchObject({ available: false, result: null });
+    expect(empty.unavailableReason).toMatch(/decided/i);
+    expect(byeOnly).toMatchObject({ available: false, result: null });
+    expect(byeOnly.unavailableReason).toMatch(/decided/i);
+  });
+
+  it("refuses schedule swaps with partial expected-week coverage", () => {
+    const result = runWhatIfScenario({
+      mode: "schedule-swap",
+      season: 2024,
+      franchiseAId: 1,
+      weeksA: schedules[1],
+      franchiseBId: 2,
+      weeksB: schedules[2].slice(0, 2),
+    });
+
+    expect(result).toMatchObject({ available: false, result: null });
+    expect(result.unavailableReason).toMatch(/coverage/i);
+  });
 });

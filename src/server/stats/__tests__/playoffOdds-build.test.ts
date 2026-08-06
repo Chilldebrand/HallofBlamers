@@ -190,6 +190,18 @@ describe("runStatBuild — stage 9 (playoff odds, Task 52)", () => {
     expect(t1Odds.playoffProbability).toBe(1);
   });
 
+  it("writes no 0/100 odds when an active season has no remaining games but lacks independent completion proof", () => {
+    seedActiveSeasonFixture(db, { season: 2031, playoffTeamCount: 2, leaveWeek3Unplayed: false });
+    db.update(weeks).set({ isComplete: false }).where(eq(weeks.season, 2031)).run();
+
+    const result = runStatBuild(db, { force: true });
+
+    expect(result.status).toBe("ok");
+    expect(result.rowCounts.playoffOdds).toBe(0);
+    expect(db.select().from(playoffOdds).all()).toEqual([]);
+    expect(result.warnings.some((warning) => warning.includes("2031") && warning.includes("completion"))).toBe(true);
+  });
+
   it("is deterministic: rebuilding against the exact same source data reproduces byte-identical playoff-odds numbers", () => {
     seedActiveSeasonFixture(db, { season: 2030, playoffTeamCount: 2, leaveWeek3Unplayed: true });
     const first = runStatBuild(db, { force: true });

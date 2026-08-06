@@ -85,6 +85,76 @@
       "when": 1785900000011,
       "tag": "0011_slot_scoring_calibration",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "6",
+      "when": 1785900000012,
+      "tag": "0012_waiver_trade_analytics",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "6",
+      "when": 1785900000013,
+      "tag": "0013_pwa_push",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "6",
+      "when": 1785900000014,
+      "tag": "0014_league_chat",
+      "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "6",
+      "when": 1785900000015,
+      "tag": "0015_add_podcast_episodes",
+      "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "6",
+      "when": 1785900000016,
+      "tag": "0016_draft_center",
+      "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "6",
+      "when": 1785900000017,
+      "tag": "0017_add_revenge_events",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "6",
+      "when": 1785900000018,
+      "tag": "0018_add_preview_episodes",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "6",
+      "when": 1785900000019,
+      "tag": "0019_playoff_odds",
+      "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "6",
+      "when": 1785900000020,
+      "tag": "0020_pin_login",
+      "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "6",
+      "when": 1785900000021,
+      "tag": "0021_transaction_items_and_trade_ledger_source",
+      "breakpoints": true
     }
   ]
 }

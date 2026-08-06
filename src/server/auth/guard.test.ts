@@ -10,6 +10,10 @@ function makeManager(overrides: Partial<Manager> = {}): Manager {
     role: "manager",
     inviteToken: "test-token",
     createdAt: new Date(),
+    pinHash: null,
+    pinFailedAttempts: 0,
+    pinLockoutLevel: 0,
+    pinLockedUntil: null,
     ...overrides,
   };
 }

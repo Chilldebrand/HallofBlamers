@@ -519,14 +519,28 @@ describe("normalizeSeason / normalizeAll", () => {
         { playerId: 5101, fromTeamSeasonId: 2, toTeamSeasonId: 3 },
         { playerId: 5201, fromTeamSeasonId: 3, toTeamSeasonId: 2 },
       ];
-      const anchored = { key: "anchored", items, anchorTeamSeasonIds: new Set([2]) };
-      const lesser = { key: "lesser", items, anchorTeamSeasonIds: new Set<number>() };
+      const anchored = { key: "anchored", scoringPeriod: 2, items, anchorTeamSeasonIds: new Set([2]) };
+      const lesser = { key: "lesser", scoringPeriod: 2, items, anchorTeamSeasonIds: new Set<number>() };
 
       for (const claims of [[lesser, anchored], [anchored, lesser]]) {
         const resolved = resolveRecoveredTradeClaims(claims);
         expect(resolved.get("anchored")).toEqual(items);
         expect(resolved.get("lesser")).toEqual([]);
       }
+    });
+
+    it("keeps identical anchored roster movements when they belong to independent scoring periods", () => {
+      const items = [
+        { playerId: 5101, fromTeamSeasonId: 2, toTeamSeasonId: 3 },
+        { playerId: 5201, fromTeamSeasonId: 3, toTeamSeasonId: 2 },
+      ];
+      const week2 = { key: "week-2-trade", scoringPeriod: 2, items, anchorTeamSeasonIds: new Set([2]) };
+      const week8 = { key: "week-8-trade", scoringPeriod: 8, items, anchorTeamSeasonIds: new Set([3]) };
+
+      const resolved = resolveRecoveredTradeClaims([week2, week8]);
+
+      expect(resolved.get("week-2-trade")).toEqual(items);
+      expect(resolved.get("week-8-trade")).toEqual(items);
     });
 
     it("does not create a row for an unexecuted transaction (e.g. a pending TRADE_PROPOSAL)", () => {

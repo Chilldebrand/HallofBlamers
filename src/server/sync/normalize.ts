@@ -1251,8 +1251,24 @@ function insertTransactions(
 const TRADE_RECORD_TYPES = new Set(["TRADE_PROPOSAL", "TRADE_ACCEPT", "TRADE_UPHOLD", "TRADE_VETO", "TRADE_DECLINE"]);
 const TRADE_ANCHOR_TYPES = new Set(["TRADE_PROPOSAL", "TRADE_ACCEPT"]);
 
-export function resolveRecoveredTradeClaims(claims: readonly GroupClaim[]): Map<string, InferredTradeItem[]> {
-  return resolveCrossGroupClaims(claims).keptByGroup;
+export interface RecoveredTradeClaim extends GroupClaim {
+  scoringPeriod: number;
+}
+
+export function resolveRecoveredTradeClaims(claims: readonly RecoveredTradeClaim[]): Map<string, InferredTradeItem[]> {
+  const claimsByPeriod = new Map<number, RecoveredTradeClaim[]>();
+  for (const claim of claims) {
+    const periodClaims = claimsByPeriod.get(claim.scoringPeriod);
+    if (periodClaims) periodClaims.push(claim);
+    else claimsByPeriod.set(claim.scoringPeriod, [claim]);
+  }
+
+  const keptByGroup = new Map<string, InferredTradeItem[]>();
+  for (const periodClaims of claimsByPeriod.values()) {
+    const periodResolution = resolveCrossGroupClaims(periodClaims);
+    for (const claim of periodClaims) keptByGroup.set(claim.key, periodResolution.keptByGroup.get(claim.key) ?? []);
+  }
+  return keptByGroup;
 }
 
 function tradeGroupKey(transaction: EspnTransaction): string | null {
@@ -1317,6 +1333,7 @@ function recoverItemlessTrades(
   const coveredPeriods = new Set(periodsWithSnapshot(tx, season, TRANSACTIONS_VIEW_KEY));
   const contexts: Array<{
     groupKey: string;
+    scoringPeriod: number;
     canonicalTransactionId: number;
     inferred: InferredTradeItem[];
     anchorTeamSeasonIds: ReadonlySet<number>;
@@ -1382,11 +1399,16 @@ function recoverItemlessTrades(
       continue;
     }
 
-    contexts.push({ groupKey, canonicalTransactionId: canonical.id, inferred, anchorTeamSeasonIds });
+    contexts.push({ groupKey, scoringPeriod: week, canonicalTransactionId: canonical.id, inferred, anchorTeamSeasonIds });
   }
 
   const resolvedByGroup = resolveRecoveredTradeClaims(
-    contexts.map((context) => ({ key: context.groupKey, items: context.inferred, anchorTeamSeasonIds: context.anchorTeamSeasonIds })),
+    contexts.map((context) => ({
+      key: context.groupKey,
+      scoringPeriod: context.scoringPeriod,
+      items: context.inferred,
+      anchorTeamSeasonIds: context.anchorTeamSeasonIds,
+    })),
   );
   let inserted = 0;
 

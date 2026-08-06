@@ -14,3 +14,7 @@ export * from "./rosterPossession";
 export * from "./waiverROI";
 export * from "./tradeRosterDiff";
 export * from "./tradeAnalytics";
+export * from "./whatIf";
+export * from "./eloCalibration";
+export * from "./playoffOdds";
+export * from "./playoffOddsBacktest";

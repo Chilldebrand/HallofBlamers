@@ -42,10 +42,13 @@ import {
   CALIBRATION_POOLED_SLOT,
   computeAchievements,
   computeWeeklyBeatdowns,
+  ELO_SEASON_REGRESSION_FACTOR,
   ELO_START,
   evaluateContextRules,
+  fitEloCalibration,
   optimalLineup,
   replay,
+  runPlayoffOddsSimulation,
   RECORD_KEYS,
   weeklyLuck,
   type AchievementAward,
@@ -62,6 +65,8 @@ import {
   type ContextTeamWeekInput,
   type FranchiseStreakSummary,
   type H2HMatchupInput,
+  type PlayoffOddsMatchup,
+  type PlayoffOddsStanding,
   type ReplayBeltOverride,
   type ReplayChampion,
   type ReplayMatchupInput,
@@ -86,6 +91,7 @@ import {
   franchises,
   h2hPairs,
   matchups,
+  playoffOdds,
   recordEntries,
   rosterSlots,
   seasonStats,
@@ -105,6 +111,7 @@ import {
   type NewEloHistory,
   type NewFranchiseElo,
   type NewH2HPair,
+  type NewPlayoffOddsRow,
   type NewRecordEntry,
   type NewSeasonStat,
   type NewSlotScoringStat,
@@ -134,6 +141,7 @@ export interface BuildRowCounts {
   contextNotes: number;
   achievements: number;
   slotScoringStats: number;
+  playoffOdds: number;
 }
 
 const EMPTY_ROW_COUNTS: BuildRowCounts = {
@@ -150,6 +158,7 @@ const EMPTY_ROW_COUNTS: BuildRowCounts = {
   contextNotes: 0,
   achievements: 0,
   slotScoringStats: 0,
+  playoffOdds: 0,
 };
 
 export interface BuildResult {
@@ -213,6 +222,7 @@ export function runStatBuild(db: Db, opts?: RunStatBuildOptions): BuildResult {
       stage34.recordEntryRows,
     );
     const slotScoringStatsRows = computeSlotScoringStatsRows(db, buildId);
+    const playoffOddsRows = computePlayoffOddsRows(db, buildId, stage34.eloHistoryRows, warnings);
 
     let rowCounts: BuildRowCounts = EMPTY_ROW_COUNTS;
 
@@ -230,6 +240,7 @@ export function runStatBuild(db: Db, opts?: RunStatBuildOptions): BuildResult {
       tx.delete(contextNotes).run();
       tx.delete(achievements).run();
       tx.delete(slotScoringStats).run();
+      tx.delete(playoffOdds).run();
 
       for (const rows of chunk(teamWeekRows, INSERT_CHUNK_SIZE)) tx.insert(teamWeek).values(rows).run();
       for (const rows of chunk(allplayWeekRows, INSERT_CHUNK_SIZE)) tx.insert(allplayWeek).values(rows).run();
@@ -253,6 +264,9 @@ export function runStatBuild(db: Db, opts?: RunStatBuildOptions): BuildResult {
       // Stage 7 (Task 32) — reads roster_slots directly (see computeSlotScoringStatsRows), no
       // dependency on any other stage's output either.
       for (const rows of chunk(slotScoringStatsRows, INSERT_CHUNK_SIZE)) tx.insert(slotScoringStats).values(rows).run();
+      // Playoff odds are derived from the active season and this build's in-memory Elo history.
+      // They are replaced in the same transaction as every other derived table.
+      for (const rows of chunk(playoffOddsRows, INSERT_CHUNK_SIZE)) tx.insert(playoffOdds).values(rows).run();
 
       const finishedAt = new Date();
       tx.update(statBuilds)
@@ -274,6 +288,7 @@ export function runStatBuild(db: Db, opts?: RunStatBuildOptions): BuildResult {
         recordEntries: stage34.recordEntryRows.length,
         h2hPairs: stage34.h2hPairRows.length,
         achievements: achievementRows.length,
+        playoffOdds: playoffOddsRows.length,
       };
     });
 
@@ -313,6 +328,121 @@ function chunk<T>(items: T[], size: number): T[][] {
   for (let i = 0; i < items.length; i += size) out.push(items.slice(i, i + size));
   return out;
 }
+const PLAYOFF_ODDS_SEED = 20260805;
+/** Matches this task's brief exactly ("N=10,000 runs"). */
+const PLAYOFF_ODDS_RUNS = 10_000;
+
+/**
+ * In-memory sibling of `src/server/queries/winProbability.ts`'s `resolvePreGameElo` — same
+ * season-rollover regression, but resolving "this franchise's CURRENT rating, right now" (i.e. as
+ * of strictly after the last game it has actually played) from an already-loaded row array instead
+ * of issuing a fresh DB query per franchise. Falls back to `ELO_START` for a franchise with no
+ * history at all yet (brand-new franchise, or a season with zero games played so far).
+ */
+function resolveCurrentEloByFranchise(eloHistoryRows: NewEloHistory[], season: number, franchiseIds: number[]): Map<number, number> {
+  const latestByFranchise = new Map<number, NewEloHistory>();
+  for (const r of eloHistoryRows) {
+    if (r.season > season) continue;
+    const cur = latestByFranchise.get(r.franchiseId);
+    if (!cur || r.season > cur.season || (r.season === cur.season && r.week > cur.week)) latestByFranchise.set(r.franchiseId, r);
+  }
+  const out = new Map<number, number>();
+  for (const franchiseId of franchiseIds) {
+    const row = latestByFranchise.get(franchiseId);
+    if (!row) {
+      out.set(franchiseId, ELO_START);
+    } else if (row.season < season) {
+      out.set(franchiseId, ELO_START + (row.eloPost - ELO_START) * ELO_SEASON_REGRESSION_FACTOR);
+    } else {
+      out.set(franchiseId, row.eloPost);
+    }
+  }
+  return out;
+}
+
+/**
+ * In-memory sibling of `loadEloCalibrationSamples` (`src/server/queries/winProbability.ts`) — same
+ * join, same no-leakage discipline (`elo_pre`, strictly BEFORE that game), but sourced from THIS
+ * build's own freshly-computed `eloHistoryRows` (see this section's header comment for why a DB
+ * read would be stale here) instead of the `elo_history` table.
+ */
+function buildEloCalibrationSamplesInMemory(
+  eloHistoryRows: NewEloHistory[],
+  matchupRows: Matchup[],
+  franchiseByTeamSeason: Map<number, number>,
+): { eloDiff: number; result: 0 | 0.5 | 1 }[] {
+  const eloPreByKey = new Map(eloHistoryRows.map((r) => [`${r.franchiseId}:${r.season}:${r.week}`, r.eloPre]));
+  const samples: { eloDiff: number; result: 0 | 0.5 | 1 }[] = [];
+  for (const m of matchupRows) {
+    if (!m.isFinal || m.awayTeamSeasonId === null || m.winner === null) continue;
+    const homeFranchiseId = franchiseByTeamSeason.get(m.homeTeamSeasonId);
+    const awayFranchiseId = franchiseByTeamSeason.get(m.awayTeamSeasonId);
+    if (homeFranchiseId === undefined || awayFranchiseId === undefined) continue;
+    const eloPreHome = eloPreByKey.get(`${homeFranchiseId}:${m.season}:${m.week}`);
+    const eloPreAway = eloPreByKey.get(`${awayFranchiseId}:${m.season}:${m.week}`);
+    if (eloPreHome === undefined || eloPreAway === undefined) continue;
+    const result: 0 | 0.5 | 1 = m.winner === "home" ? 1 : m.winner === "away" ? 0 : 0.5;
+    samples.push({ eloDiff: eloPreHome - eloPreAway, result });
+  }
+  return samples;
+}
+
+function computePlayoffOddsRows(db: Db, buildId: number, eloHistoryRows: NewEloHistory[], warnings: string[]): NewPlayoffOddsRow[] {
+  const seasonRows = db.select().from(seasons).all();
+  const activeSeasons = seasonRows.filter((s) => s.status === "active");
+  if (activeSeasons.length === 0) return [];
+
+  const teamSeasonRows = db.select({ id: teamSeasons.id, season: teamSeasons.season, franchiseId: teamSeasons.franchiseId, wins: teamSeasons.wins, losses: teamSeasons.losses, ties: teamSeasons.ties, pointsFor: teamSeasons.pointsFor }).from(teamSeasons).all();
+  const franchiseByTeamSeason = new Map(teamSeasonRows.map((t) => [t.id, t.franchiseId]));
+  const matchupRows = db.select().from(matchups).all();
+  const weekRows = db.select({ season: weeks.season, week: weeks.week, weekType: weeks.weekType }).from(weeks).all();
+  const regularWeekSet = new Set(weekRows.filter((w) => w.weekType === "regular").map((w) => `${w.season}:${w.week}`));
+
+  const calibrationSamples = buildEloCalibrationSamplesInMemory(eloHistoryRows, matchupRows, franchiseByTeamSeason);
+  const eloCalibration = fitEloCalibration(calibrationSamples);
+
+  const out: NewPlayoffOddsRow[] = [];
+  for (const season of activeSeasons) {
+    const playoffFormat = season.playoffFormatJson as { playoffTeamCount?: unknown } | null | undefined;
+    const playoffTeamCount = typeof playoffFormat?.playoffTeamCount === "number" ? playoffFormat.playoffTeamCount : null;
+    if (playoffTeamCount === null) {
+      warnings.push(`stage 9 (playoff odds): season ${season.season} is active but playoff_format_json has no numeric playoffTeamCount — skipped, no rows produced`);
+      continue;
+    }
+
+    const standings: PlayoffOddsStanding[] = teamSeasonRows
+      .filter((t) => t.season === season.season)
+      .map((t) => ({ franchiseId: t.franchiseId, wins: t.wins, losses: t.losses, ties: t.ties, pointsFor: t.pointsFor }));
+    if (standings.length === 0) continue; // no team_seasons rows for this "active" season yet — nothing to simulate
+
+    const remainingMatchups: PlayoffOddsMatchup[] = matchupRows
+      .filter((m) => m.season === season.season && !m.isFinal && m.awayTeamSeasonId !== null && regularWeekSet.has(`${m.season}:${m.week}`))
+      .map((m) => ({ homeFranchiseId: franchiseByTeamSeason.get(m.homeTeamSeasonId)!, awayFranchiseId: franchiseByTeamSeason.get(m.awayTeamSeasonId!)! }))
+      .filter((m) => m.homeFranchiseId !== undefined && m.awayFranchiseId !== undefined);
+
+    const eloByFranchise = resolveCurrentEloByFranchise(eloHistoryRows, season.season, standings.map((s) => s.franchiseId));
+
+    const result = runPlayoffOddsSimulation(
+      { standings, remainingMatchups, eloByFranchise, eloCalibration, format: { teamCount: season.teamCount, playoffTeamCount } },
+      PLAYOFF_ODDS_SEED,
+      PLAYOFF_ODDS_RUNS,
+    );
+
+    for (const f of result.franchises) {
+      out.push({
+        buildId,
+        season: season.season,
+        franchiseId: f.franchiseId,
+        playoffProbability: f.playoffProbability,
+        topSeedProbability: f.topSeedProbability,
+        seedDistributionJson: f.seedDistribution,
+        runs: result.runs,
+      });
+    }
+  }
+
+  return out;
+}
 
 // ---------------------------------------------------------------------------
 // Input-hash change detection
@@ -348,7 +478,7 @@ function chunk<T>(items: T[], size: number): T[][] {
  * very first build to include slot_scoring_stats needs to run automatically on the next
  * `stats:build`, not require a manual `--force`.
  */
-const STAT_ENGINE_VERSION = 3;
+const STAT_ENGINE_VERSION = 4;
 
 /**
  * Per source table: row count + max rowid + a cheap content aggregate, so real data changes (not

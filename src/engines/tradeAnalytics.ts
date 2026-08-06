@@ -106,14 +106,14 @@ export function computeTradeLedger(received: TradeReceivedItem[], departures: Tr
           droppedWeek: w.endWeekExclusive,
           source: item.source,
         };
-      });
+      }).sort((a, b) => a.playerId - b.playerId);
       return {
         franchiseId,
         teamSeasonId,
         received: receivedResults,
         totalStarterPoints: receivedResults.reduce((sum, r) => sum + r.starterPoints, 0),
       };
-    });
+    }).sort((a, b) => a.franchiseId - b.franchiseId || a.teamSeasonId - b.teamSeasonId);
 
     let winnerFranchiseId: number | null = null;
     let marginPoints: number | null = null;

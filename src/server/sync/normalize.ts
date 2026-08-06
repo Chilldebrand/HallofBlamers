@@ -19,6 +19,8 @@ import {
   inferTradeItemsFromRosterDiff,
   keepDominantBlock,
   keepDominantComponent,
+  resolveCrossGroupClaims,
+  type GroupClaim,
   type InferredTradeItem,
   type RosterEntry,
 } from "../../engines/tradeRosterDiff";
@@ -1249,6 +1251,10 @@ function insertTransactions(
 const TRADE_RECORD_TYPES = new Set(["TRADE_PROPOSAL", "TRADE_ACCEPT", "TRADE_UPHOLD", "TRADE_VETO", "TRADE_DECLINE"]);
 const TRADE_ANCHOR_TYPES = new Set(["TRADE_PROPOSAL", "TRADE_ACCEPT"]);
 
+export function resolveRecoveredTradeClaims(claims: readonly GroupClaim[]): Map<string, InferredTradeItem[]> {
+  return resolveCrossGroupClaims(claims).keptByGroup;
+}
+
 function tradeGroupKey(transaction: EspnTransaction): string | null {
   const related = transaction.relatedTransactionId;
   if (related !== undefined && related !== null) return String(related);
@@ -1309,7 +1315,12 @@ function recoverItemlessTrades(
   }
 
   const coveredPeriods = new Set(periodsWithSnapshot(tx, season, TRANSACTIONS_VIEW_KEY));
-  let inserted = 0;
+  const contexts: Array<{
+    groupKey: string;
+    canonicalTransactionId: number;
+    inferred: InferredTradeItem[];
+    anchorTeamSeasonIds: ReadonlySet<number>;
+  }> = [];
 
   for (const [groupKey, groupRows] of rowsByGroup) {
     const related = rawTransactions.filter((raw) => {
@@ -1361,24 +1372,39 @@ function recoverItemlessTrades(
       .all();
 
     const canonical = groupRows.reduce((lowest, row) => row.id < lowest.id ? row : lowest, groupRows[0]!);
-    let inferred: InferredTradeItem[] = inferTradeItemsFromRosterDiff(before, after).filter((item) => {
+    const inferred: InferredTradeItem[] = inferTradeItemsFromRosterDiff(before, after).filter((item) => {
       const departureExplained = hasIndependentMove(tx, canonical.id, item.playerId, item.fromTeamSeasonId, ["drop", "trade_away"]);
       const arrivalExplained = hasIndependentMove(tx, canonical.id, item.playerId, item.toTeamSeasonId, ["add", "trade_for"]);
       return !(departureExplained && arrivalExplained);
     });
-    inferred = keepDominantComponent(excludeLoneLegs(inferred), anchorTeamSeasonIds);
-    inferred = keepDominantBlock(inferred, anchorTeamSeasonIds);
     if (inferred.length === 0) {
       warnings.push(`season ${season}: recovered trade group ${groupKey} had no defensible roster exchange; left incomplete`);
       continue;
     }
 
+    contexts.push({ groupKey, canonicalTransactionId: canonical.id, inferred, anchorTeamSeasonIds });
+  }
+
+  const resolvedByGroup = resolveRecoveredTradeClaims(
+    contexts.map((context) => ({ key: context.groupKey, items: context.inferred, anchorTeamSeasonIds: context.anchorTeamSeasonIds })),
+  );
+  let inserted = 0;
+
+  for (const context of contexts) {
+    let inferred = resolvedByGroup.get(context.groupKey) ?? [];
+    inferred = keepDominantComponent(excludeLoneLegs(inferred), context.anchorTeamSeasonIds);
+    inferred = keepDominantBlock(inferred, context.anchorTeamSeasonIds);
+    if (inferred.length === 0) {
+      warnings.push(`season ${season}: recovered trade group ${context.groupKey} lost every contested or structurally unsupported move; left incomplete`);
+      continue;
+    }
+
     for (const item of inferred) {
       tx.insert(transactionItems)
-        .values({ transactionId: canonical.id, teamSeasonId: item.fromTeamSeasonId, playerId: item.playerId, action: "trade_away", source: "inferred" })
+        .values({ transactionId: context.canonicalTransactionId, teamSeasonId: item.fromTeamSeasonId, playerId: item.playerId, action: "trade_away", source: "inferred" })
         .run();
       tx.insert(transactionItems)
-        .values({ transactionId: canonical.id, teamSeasonId: item.toTeamSeasonId, playerId: item.playerId, action: "trade_for", source: "inferred" })
+        .values({ transactionId: context.canonicalTransactionId, teamSeasonId: item.toTeamSeasonId, playerId: item.playerId, action: "trade_for", source: "inferred" })
         .run();
       inserted += 2;
     }

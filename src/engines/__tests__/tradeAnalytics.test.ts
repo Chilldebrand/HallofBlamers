@@ -22,6 +22,20 @@ describe("analyzeTrade", () => {
     expect(result[0]?.sides.map((side) => side.franchiseId)).toEqual([1, 2, 3]);
   });
 
+  it("sorts sides by franchise/team and received players by player id regardless of input order", () => {
+    const received = [
+      { transactionId: 800, espnTxId: "trade-800", season: 2024, week: 6, teamSeasonId: 300, franchiseId: 30, playerId: 303, source: "espn" as const },
+      { transactionId: 800, espnTxId: "trade-800", season: 2024, week: 6, teamSeasonId: 100, franchiseId: 10, playerId: 102, source: "espn" as const },
+      { transactionId: 800, espnTxId: "trade-800", season: 2024, week: 6, teamSeasonId: 300, franchiseId: 30, playerId: 301, source: "espn" as const },
+      { transactionId: 800, espnTxId: "trade-800", season: 2024, week: 6, teamSeasonId: 100, franchiseId: 10, playerId: 101, source: "espn" as const },
+    ];
+
+    const [entry] = analyzeTrade(received, [], []);
+
+    expect(entry?.sides.map((side) => side.franchiseId)).toEqual([10, 30]);
+    expect(entry?.sides.map((side) => side.received.map((player) => player.playerId))).toEqual([[101, 102], [301, 303]]);
+  });
+
   it("is empty-safe", () => {
     expect(analyzeTrade([], [], [])).toEqual([]);
   });

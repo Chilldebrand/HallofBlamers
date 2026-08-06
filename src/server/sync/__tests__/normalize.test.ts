@@ -38,6 +38,7 @@ import { loadSeedCorrections } from "../corrections";
 import {
   normalizeAll,
   normalizeSeason,
+  resolveRecoveredTradeClaims,
   SEASON_SCOPE_VIEW_KEY,
   TRANSACTIONS_VIEW_KEY,
   WEEK_SCOPE_VIEW_KEY,
@@ -451,6 +452,81 @@ describe("normalizeSeason / normalizeAll", () => {
       expect(recovered).toContainEqual(expect.objectContaining({ playerId: 5101, action: "trade_for" }));
       expect(recovered).toContainEqual(expect.objectContaining({ playerId: 5201, action: "trade_away" }));
       expect(recovered).toContainEqual(expect.objectContaining({ playerId: 5201, action: "trade_for" }));
+    });
+
+    it("resolves overlapping same-week recovery claims before inserts, preserving the anchored group in either raw order", () => {
+      const week2 = buildWeekScopePayload(2) as {
+        schedule: Array<{
+          matchupPeriodId: number;
+          home: { teamId: number; rosterForCurrentScoringPeriod?: { entries: unknown[] } };
+          away: { teamId: number; rosterForCurrentScoringPeriod?: { entries: unknown[] } };
+        }>;
+      };
+      const sides = week2.schedule
+        .filter((entry) => entry.matchupPeriodId === 2)
+        .flatMap((entry) => [entry.home, entry.away]);
+      const team2 = sides.find((side) => side.teamId === 2)!;
+      const team3 = sides.find((side) => side.teamId === 3)!;
+      const team2Entries = team2.rosterForCurrentScoringPeriod!.entries;
+      team2.rosterForCurrentScoringPeriod!.entries = team3.rosterForCurrentScoringPeriod!.entries;
+      team3.rosterForCurrentScoringPeriod!.entries = team2Entries;
+      storeSnapshot(db, {
+        season: FIXTURE_SEASON,
+        scoringPeriod: 2,
+        view: WEEK_SCOPE_VIEW_KEY,
+        url: "https://example.com/week2-overlap",
+        httpStatus: 200,
+        payload: JSON.stringify(week2),
+      });
+
+      const anchored = [
+        { id: "anchored-accept", relatedTransactionId: "anchored-logical", type: "TRADE_ACCEPT", status: "EXECUTED", teamId: 2, scoringPeriodId: 2 },
+        { id: "anchored-uphold", relatedTransactionId: "anchored-logical", type: "TRADE_UPHOLD", status: "EXECUTED", teamId: 3, scoringPeriodId: 2 },
+      ];
+      const lesser = [
+        { id: "lesser-a", relatedTransactionId: "lesser-logical", type: "TRADE_UPHOLD", status: "EXECUTED", teamId: 2, scoringPeriodId: 2 },
+        { id: "lesser-b", relatedTransactionId: "lesser-logical", type: "TRADE_UPHOLD", status: "EXECUTED", teamId: 3, scoringPeriodId: 2 },
+      ];
+
+      const runOrder = (rawTransactions: Record<string, unknown>[]) => {
+        for (const period of [1, 2]) {
+          storeSnapshot(db, {
+            season: FIXTURE_SEASON,
+            scoringPeriod: period,
+            view: TRANSACTIONS_VIEW_KEY,
+            url: `https://example.com/overlap-${period}-${rawTransactions[0]!.id}`,
+            httpStatus: 200,
+            payload: JSON.stringify(buildTransactionsPeriodPayload(period, rawTransactions)),
+          });
+        }
+        normalizeSeason(db, FIXTURE_SEASON, { franchiseSeed: buildFranchiseSeed(), leagueId: FIXTURE_LEAGUE_ID });
+        const anchoredTx = db.select().from(transactions).where(eq(transactions.espnTxId, "anchored-accept")).get()!;
+        const lesserTx = db.select().from(transactions).where(eq(transactions.espnTxId, "lesser-a")).get()!;
+        return {
+          anchoredCount: db.select().from(transactionItems).where(eq(transactionItems.transactionId, anchoredTx.id)).all().length,
+          lesserCount: db.select().from(transactionItems).where(eq(transactionItems.transactionId, lesserTx.id)).all().length,
+        };
+      };
+
+      const lesserFirst = runOrder([...lesser, ...anchored]);
+      const anchoredFirst = runOrder([...anchored, ...lesser]);
+      expect(lesserFirst).toEqual({ anchoredCount: 4, lesserCount: 0 });
+      expect(anchoredFirst).toEqual({ anchoredCount: 4, lesserCount: 0 });
+    });
+
+    it("assigns contested recovered moves to the uniquely anchored group independent of context order", () => {
+      const items = [
+        { playerId: 5101, fromTeamSeasonId: 2, toTeamSeasonId: 3 },
+        { playerId: 5201, fromTeamSeasonId: 3, toTeamSeasonId: 2 },
+      ];
+      const anchored = { key: "anchored", items, anchorTeamSeasonIds: new Set([2]) };
+      const lesser = { key: "lesser", items, anchorTeamSeasonIds: new Set<number>() };
+
+      for (const claims of [[lesser, anchored], [anchored, lesser]]) {
+        const resolved = resolveRecoveredTradeClaims(claims);
+        expect(resolved.get("anchored")).toEqual(items);
+        expect(resolved.get("lesser")).toEqual([]);
+      }
     });
 
     it("does not create a row for an unexecuted transaction (e.g. a pending TRADE_PROPOSAL)", () => {

@@ -191,9 +191,16 @@ function buildRegularSeasonWeekInputs(season: number): RegularSeasonWeekInputs {
     list.push({ week: r.week, ownScore: r.score, opponentFranchiseId, opponentScore });
     byFranchise.set(r.franchiseId, list);
   }
+  const expectedFranchiseIds = db
+    .select({ franchiseId: teamSeasons.franchiseId })
+    .from(teamSeasons)
+    .where(eq(teamSeasons.season, season))
+    .all()
+    .map((row) => row.franchiseId);
   const coverage = validateWhatIfScheduleCoverage(
     [...byFranchise.entries()].map(([franchiseId, weeks]) => ({ franchiseId, weeks })),
     true,
+    expectedFranchiseIds,
   );
   return { byFranchise, coverage };
 }

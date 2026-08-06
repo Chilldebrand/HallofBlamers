@@ -41,6 +41,7 @@ export interface WhatIfScheduleCoverageResult {
 export function validateWhatIfScheduleCoverage(
   franchiseSchedules: { franchiseId: number; weeks: WhatIfWeekInput[] }[],
   requireAllOpponents = false,
+  expectedFranchiseIds?: readonly number[],
 ): WhatIfScheduleCoverageResult {
   if (franchiseSchedules.length === 0 || franchiseSchedules.some((entry) => entry.weeks.length === 0)) {
     return { available: false, unavailableReason: "Complete schedule coverage is unavailable for this season." };
@@ -48,6 +49,16 @@ export function validateWhatIfScheduleCoverage(
 
   const expectedWeeks = new Set(franchiseSchedules[0]!.weeks.map((week) => week.week));
   const franchiseIds = new Set(franchiseSchedules.map((entry) => entry.franchiseId));
+  if (expectedFranchiseIds) {
+    const expected = new Set(expectedFranchiseIds);
+    if (
+      expected.size !== expectedFranchiseIds.length ||
+      franchiseIds.size !== expected.size ||
+      [...expected].some((franchiseId) => !franchiseIds.has(franchiseId))
+    ) {
+      return { available: false, unavailableReason: "Expected franchise coverage is incomplete for this schedule." };
+    }
+  }
   const rows = new Map<string, WhatIfWeekInput>();
   for (const entry of franchiseSchedules) {
     const weeks = new Set(entry.weeks.map((week) => week.week));
@@ -377,6 +388,7 @@ export type WhatIfScenarioInput =
       franchiseId: number;
       ownWeeks: WhatIfWeekInput[];
       otherFranchises: { franchiseId: number; weeks: WhatIfWeekInput[] }[];
+      expectedFranchiseIds: readonly number[];
     }
   | {
       mode: "perfect-lineup";
@@ -417,6 +429,14 @@ export function runWhatIfScenario(
   }
 
   if (input.mode === "best-worst") {
+    const coverage = validateWhatIfScheduleCoverage(
+      [{ franchiseId: input.franchiseId, weeks: input.ownWeeks }, ...input.otherFranchises],
+      true,
+      input.expectedFranchiseIds,
+    );
+    if (!coverage.available) {
+      return { available: false, unavailableReason: coverage.unavailableReason, result: null };
+    }
     const result = bestWorstSchedule(input.season, input.franchiseId, input.ownWeeks, input.otherFranchises);
     return { available: result.available, unavailableReason: result.unavailableReason, result };
   }

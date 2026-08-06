@@ -93,6 +93,7 @@ describe("deterministic scenario analytics", () => {
       franchiseId: 1,
       ownWeeks: schedules[1],
       otherFranchises: [],
+      expectedFranchiseIds: [1, 2, 3, 4],
     });
     expect(missing.available).toBe(false);
     expect(missing.unavailableReason).toMatch(/schedule/i);
@@ -134,5 +135,19 @@ describe("deterministic scenario analytics", () => {
 
     expect(result).toMatchObject({ available: false, result: null });
     expect(result.unavailableReason).toMatch(/coverage/i);
+  });
+
+  it("refuses best-worst mode when an expected comparison franchise is missing", () => {
+    const result = runWhatIfScenario({
+      mode: "best-worst",
+      season: 2024,
+      franchiseId: 1,
+      ownWeeks: schedules[1],
+      otherFranchises: [{ franchiseId: 2, weeks: schedules[2] }],
+      expectedFranchiseIds: [1, 2, 3, 4],
+    });
+
+    expect(result).toMatchObject({ available: false, result: null });
+    expect(result.unavailableReason).toMatch(/franchise coverage/i);
   });
 });

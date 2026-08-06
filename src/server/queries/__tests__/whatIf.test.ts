@@ -135,6 +135,7 @@ describe("DB-facing", () => {
         { season: 2016, leagueId: league.id, settingsJson: {}, scoringJson: {}, playoffFormatJson: {}, teamCount: 4, regSeasonWeeks: 3, status: "complete" }, // pre-2018: no lineup data
         { season: 2019, leagueId: league.id, settingsJson: {}, scoringJson: {}, playoffFormatJson: {}, teamCount: 4, regSeasonWeeks: 3, status: "complete" }, // has the 187.7 outlier + an in-progress future week
         { season: 2020, leagueId: league.id, settingsJson: {}, scoringJson: {}, playoffFormatJson: {}, teamCount: 2, regSeasonWeeks: 1, status: "complete" }, // deliberately one-sided schedule coverage
+        { season: 2022, leagueId: league.id, settingsJson: {}, scoringJson: {}, playoffFormatJson: {}, teamCount: 3, regSeasonWeeks: 1, status: "complete" }, // one expected franchise has no team_week row
       ])
       .run();
 
@@ -160,6 +161,9 @@ describe("DB-facing", () => {
     const tsC2019 = ts(2019, franchiseC, 3);
     const tsA2020 = ts(2020, franchiseA, 1);
     const tsB2020 = ts(2020, franchiseB, 2);
+    const tsA2022 = ts(2022, franchiseA, 1);
+    const tsB2022 = ts(2022, franchiseB, 2);
+    ts(2022, franchiseC, 3);
 
     const build = db.insert(statBuilds).values({ startedAt: new Date(), inputHash: "test", status: "ok" }).returning().get();
     const buildId = build.id;
@@ -172,6 +176,13 @@ describe("DB-facing", () => {
         { buildId, season: 2016, week: 1, weekType: "regular", teamSeasonId: tsB2016, franchiseId: franchiseB, opponentFranchiseId: franchiseA, score: 90, result: "L", margin: -10, optimalScore: null },
         { buildId, season: 2016, week: 2, weekType: "regular", teamSeasonId: tsA2016, franchiseId: franchiseA, opponentFranchiseId: franchiseC, score: 88, result: "L", margin: -5, optimalScore: null },
         { buildId, season: 2016, week: 2, weekType: "regular", teamSeasonId: tsC2016, franchiseId: franchiseC, opponentFranchiseId: franchiseA, score: 93, result: "W", margin: 5, optimalScore: null },
+      ])
+      .run();
+
+    db.insert(teamWeek)
+      .values([
+        { buildId, season: 2022, week: 1, weekType: "regular", teamSeasonId: tsA2022, franchiseId: franchiseA, opponentFranchiseId: franchiseB, score: 100, result: "W", margin: 10, optimalScore: 110 },
+        { buildId, season: 2022, week: 1, weekType: "regular", teamSeasonId: tsB2022, franchiseId: franchiseB, opponentFranchiseId: franchiseA, score: 90, result: "L", margin: -10, optimalScore: 95 },
       ])
       .run();
 
@@ -263,6 +274,12 @@ describe("DB-facing", () => {
     const page = getWhatIfPageData({ mode: "swap", season: "2020", franchiseA: String(franchiseA), franchiseB: String(franchiseB) });
     expect(page.available).toBe(false);
     expect(page.unavailableReason).toMatch(/coverage/i);
+  });
+
+  it("rejects best-worst when a team-season franchise is entirely missing from weekly coverage", () => {
+    expect(getBestWorstScheduleResult(2022, franchiseA)).toBeNull();
+    const page = getWhatIfPageData({ mode: "bestworst", season: "2022", franchise: String(franchiseA) });
+    expect(page.available).toBe(false);
   });
 
   describe("getBestWorstScheduleResult — 2019", () => {

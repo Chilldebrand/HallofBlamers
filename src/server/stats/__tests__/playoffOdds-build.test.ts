@@ -7,7 +7,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createDb, type Db } from "../../db/client";
 import { runMigrations } from "../../db/migrate";
 import { franchises, leagues, matchups, playoffOdds, seasons, teamSeasons, weeks, type NewMatchup } from "../../db/schema";
-import { runStatBuild } from "../build";
+import { runStatBuild, validateCompletedScheduleProof } from "../build";
 
 const LEAGUE_ID_COUNTER = { n: 1 };
 
@@ -200,6 +200,34 @@ describe("runStatBuild — stage 9 (playoff odds, Task 52)", () => {
     expect(result.rowCounts.playoffOdds).toBe(0);
     expect(db.select().from(playoffOdds).all()).toEqual([]);
     expect(result.warnings.some((warning) => warning.includes("2031") && warning.includes("completion"))).toBe(true);
+  });
+
+  it("writes no completed odds when unique standings coverage is smaller than season.teamCount", () => {
+    seedActiveSeasonFixture(db, { season: 2032, playoffTeamCount: 2, leaveWeek3Unplayed: false });
+    db.update(seasons).set({ teamCount: 6 }).where(eq(seasons.season, 2032)).run();
+
+    const result = runStatBuild(db, { force: true });
+
+    expect(result.status).toBe("ok");
+    expect(result.rowCounts.playoffOdds).toBe(0);
+    expect(db.select().from(playoffOdds).all()).toEqual([]);
+    expect(result.warnings.some((warning) => warning.includes("2032") && warning.includes("franchise coverage"))).toBe(true);
+  });
+
+  it("rejects completed schedule proof when matchup rows duplicate franchises and omit others", () => {
+    const proof = validateCompletedScheduleProof({
+      teamCount: 4,
+      regSeasonWeeks: 1,
+      standingsFranchiseIds: [1, 2, 3, 4],
+      regularWeeks: [{ week: 1, isComplete: true }],
+      matchups: [
+        { week: 1, homeFranchiseId: 1, awayFranchiseId: 2, isFinal: true },
+        { week: 1, homeFranchiseId: 2, awayFranchiseId: 1, isFinal: true },
+      ],
+    });
+
+    expect(proof.complete).toBe(false);
+    expect(proof.unavailableReason).toMatch(/franchise coverage/i);
   });
 
   it("is deterministic: rebuilding against the exact same source data reproduces byte-identical playoff-odds numbers", () => {

@@ -332,6 +332,61 @@ const PLAYOFF_ODDS_SEED = 20260805;
 /** Matches this task's brief exactly ("N=10,000 runs"). */
 const PLAYOFF_ODDS_RUNS = 10_000;
 
+export interface CompletedScheduleProofInput {
+  teamCount: number;
+  regSeasonWeeks: number;
+  standingsFranchiseIds: readonly number[];
+  regularWeeks: readonly { week: number; isComplete: boolean }[];
+  matchups: readonly {
+    week: number;
+    homeFranchiseId: number | null;
+    awayFranchiseId: number | null;
+    isFinal: boolean;
+  }[];
+}
+
+export interface CompletedScheduleProofResult {
+  complete: boolean;
+  unavailableReason: string | null;
+}
+
+/** Positive proof for the no-remaining-games short circuit. Counts alone are insufficient: every
+ * declared franchise must exist in standings and appear at most once in each completed week. */
+export function validateCompletedScheduleProof(input: CompletedScheduleProofInput): CompletedScheduleProofResult {
+  const standingsIds = new Set(input.standingsFranchiseIds);
+  if (input.teamCount <= 0 || input.standingsFranchiseIds.length !== input.teamCount || standingsIds.size !== input.teamCount) {
+    return { complete: false, unavailableReason: "standings franchise coverage does not match season.teamCount" };
+  }
+
+  const weekNumbers = new Set(input.regularWeeks.map((week) => week.week));
+  if (
+    input.regSeasonWeeks <= 0 ||
+    input.regularWeeks.length !== input.regSeasonWeeks ||
+    weekNumbers.size !== input.regSeasonWeeks ||
+    input.regularWeeks.some((week) => !week.isComplete)
+  ) {
+    return { complete: false, unavailableReason: "regular-season completion proof is incomplete" };
+  }
+
+  const expectedMatchups = Math.floor(input.teamCount / 2);
+  const expectedParticipants = expectedMatchups * 2;
+  for (const week of weekNumbers) {
+    const scheduled = input.matchups.filter((matchup) => matchup.week === week);
+    if (scheduled.length !== expectedMatchups || scheduled.some((matchup) => !matchup.isFinal)) {
+      return { complete: false, unavailableReason: "regular-season completion proof is incomplete" };
+    }
+    const participants = scheduled.flatMap((matchup) => [matchup.homeFranchiseId, matchup.awayFranchiseId]);
+    if (
+      participants.some((franchiseId) => franchiseId === null || !standingsIds.has(franchiseId)) ||
+      new Set(participants).size !== expectedParticipants
+    ) {
+      return { complete: false, unavailableReason: "matchup franchise coverage is duplicated or incomplete" };
+    }
+  }
+
+  return { complete: true, unavailableReason: null };
+}
+
 /**
  * In-memory sibling of `src/server/queries/winProbability.ts`'s `resolvePreGameElo` — same
  * season-rollover regression, but resolving "this franchise's CURRENT rating, right now" (i.e. as
@@ -422,21 +477,28 @@ function computePlayoffOddsRows(db: Db, buildId: number, eloHistoryRows: NewEloH
 
     if (remainingMatchups.length === 0) {
       const regularWeeks = weekRows.filter((week) => week.season === season.season && week.weekType === "regular");
-      const uniqueRegularWeeks = new Set(regularWeeks.map((week) => week.week));
-      const expectedMatchupsPerWeek = Math.floor(standings.length / 2);
-      const hasCompleteWeeks =
-        season.regSeasonWeeks > 0 &&
-        uniqueRegularWeeks.size === season.regSeasonWeeks &&
-        regularWeeks.every((week) => week.isComplete);
-      const hasCompleteMatchups = [...uniqueRegularWeeks].every((week) => {
-        const scheduled = matchupRows.filter(
-          (matchup) => matchup.season === season.season && matchup.week === week && matchup.awayTeamSeasonId !== null,
-        );
-        return scheduled.length === expectedMatchupsPerWeek && scheduled.every((matchup) => matchup.isFinal);
+      const completedScheduleProof = validateCompletedScheduleProof({
+        teamCount: season.teamCount,
+        regSeasonWeeks: season.regSeasonWeeks,
+        standingsFranchiseIds: standings.map((standing) => standing.franchiseId),
+        regularWeeks,
+        matchups: matchupRows
+          .filter(
+            (matchup) =>
+              matchup.season === season.season &&
+              matchup.awayTeamSeasonId !== null &&
+              regularWeekSet.has(`${matchup.season}:${matchup.week}`),
+          )
+          .map((matchup) => ({
+            week: matchup.week,
+            homeFranchiseId: franchiseByTeamSeason.get(matchup.homeTeamSeasonId) ?? null,
+            awayFranchiseId: franchiseByTeamSeason.get(matchup.awayTeamSeasonId!) ?? null,
+            isFinal: matchup.isFinal,
+          })),
       });
-      if (!hasCompleteWeeks || !hasCompleteMatchups) {
+      if (!completedScheduleProof.complete) {
         warnings.push(
-          `stage 9 (playoff odds): season ${season.season} has no remaining schedule but lacks independent regular-season completion proof — skipped`,
+          `stage 9 (playoff odds): season ${season.season} has no remaining schedule but lacks independent completion proof (${completedScheduleProof.unavailableReason}) — skipped`,
         );
         continue;
       }
@@ -500,7 +562,7 @@ function computePlayoffOddsRows(db: Db, buildId: number, eloHistoryRows: NewEloH
  * very first build to include slot_scoring_stats needs to run automatically on the next
  * `stats:build`, not require a manual `--force`.
  */
-const STAT_ENGINE_VERSION = 5;
+const STAT_ENGINE_VERSION = 6;
 
 /**
  * Per source table: row count + max rowid + a cheap content aggregate, so real data changes (not

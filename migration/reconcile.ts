@@ -15,7 +15,13 @@ const hashRow = (row: Record<string, unknown>) => createHash("sha256").update(JS
 export async function reconcileInto(sourcePath: string, target: PgConnection): Promise<{ passed: boolean; mismatches: string[]; databaseBytes: number }> {
   const sqlite = new Database(sourcePath, { readonly: true, fileMustExist: true });
   const mismatches: string[] = [];
+  let originalFloatDigits: string | undefined;
   try {
+    // Hosted Postgres may default to rounded float text. Compare exact stored
+    // IEEE-754 values rather than introducing a tolerance that hides drift.
+    const setting = await target.query("SELECT current_setting('extra_float_digits') AS value");
+    originalFloatDigits = String(setting.rows[0].value);
+    await target.query("SET extra_float_digits=3");
     const sourceTables = sqlite.prepare("SELECT name FROM sqlite_schema WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name != '__drizzle_migrations' ORDER BY name").all() as { name: string }[];
     for (const { name } of sourceTables) {
       const config = tables.find(t => t.name === name);
@@ -32,7 +38,10 @@ export async function reconcileInto(sourcePath: string, target: PgConnection): P
     }
     const size = await target.query("SELECT pg_database_size(current_database())::text AS bytes");
     return { passed: mismatches.length === 0, mismatches, databaseBytes: Number(size.rows[0].bytes) };
-  } finally { sqlite.close(); }
+  } finally {
+    sqlite.close();
+    if (originalFloatDigits !== undefined) await target.query("SELECT set_config('extra_float_digits',$1,false)", [originalFloatDigits]);
+  }
 }
 
 export async function reconcile(sourcePath: string, targetUrl: string) {

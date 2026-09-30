@@ -51,6 +51,22 @@ test("reconcile detects changed values even when row counts match", async () => 
   expect(result.mismatches).toContain("seasons: content differs");
 }, 30000);
 
+test("reconcile preserves exact floats when the server defaults to rounded text output", async () => {
+  const { file, pg } = await setup();
+  await importInto(file, pg, { dryRun: false });
+  const sqlite = new Database(file);
+  sqlite.exec('CREATE TABLE franchise_elo (id INTEGER PRIMARY KEY, current REAL)');
+  sqlite.prepare('INSERT INTO franchise_elo VALUES (1,?)').run(0.1 + 0.2);
+  sqlite.close();
+  await pg.query("INSERT INTO hob_private.stat_builds(id,started_at,input_hash,status) VALUES(1,now(),'fixture','ok')");
+  await pg.query('INSERT INTO hob_private.franchise_elo(id,build_id,franchise_id,current,peak,peak_season,peak_week,trough,weeks_at_no1) VALUES(1,1,1,$1,1,2020,1,0,0)', [0.1 + 0.2]);
+  await pg.query('SET extra_float_digits=0');
+  expect((await reconcileInto(file, pg)).passed).toBe(true);
+  expect((await pg.query("SHOW extra_float_digits")).rows).toEqual([{ extra_float_digits: "0" }]);
+  await pg.query('UPDATE hob_private.franchise_elo SET current=0.3 WHERE id=1');
+  expect((await reconcileInto(file, pg)).passed).toBe(false);
+}, 30000);
+
 test("dry run validates constraints but leaves no imported rows", async () => {
   const { file, pg } = await setup();
   await importInto(file, pg, { dryRun: true });

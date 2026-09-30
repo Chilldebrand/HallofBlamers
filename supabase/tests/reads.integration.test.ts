@@ -12,6 +12,7 @@ beforeEach(async () => {
   await db.exec(generateSchema());
   await db.exec(readFileSync("supabase/migrations/202609290002_auth.sql", "utf8"));
   await db.exec(readFileSync("supabase/migrations/202609290003_reads.sql", "utf8"));
+  await db.exec(readFileSync("supabase/migrations/202609300001_float_precision.sql", "utf8"));
   await db.exec(`INSERT INTO hob_private.managers(id,name,role,invite_token) VALUES(2,'Member','manager','never-expose-me');
     INSERT INTO hob_private.memberships(auth_user_id,manager_id) VALUES('${user}',2);
     INSERT INTO hob_private.leagues(id,espn_league_id,name,first_season) VALUES(1,1690915927,'Fixture',2025);
@@ -34,4 +35,13 @@ test("uninvited and revoked sessions cannot retrieve standings",async()=>{
   await db.exec("RESET ROLE; UPDATE hob_private.memberships SET revoked_at=now()");
   await login();
   await expect(db.query("select public.hob_standings_source(null)")).rejects.toThrow();
+});
+
+test("standings JSON preserves stored floating-point precision", async () => {
+  await db.exec("INSERT INTO hob_private.franchises(id,canonical_name,manager_name,joined_season) VALUES(1,'Fixture','Fixture',2025)");
+  await db.query("INSERT INTO hob_private.team_seasons(season,franchise_id,espn_team_id,team_name,wins,losses,ties,points_for,points_against,made_playoffs) VALUES(2025,1,1,'Fixture',1,0,0,$1,0,false)", [0.1 + 0.2]);
+  await db.exec('SET extra_float_digits=0');
+  await login();
+  const { rows } = await db.query<{ data: { teamSeasons: { points_for: number }[] } }>('SELECT public.hob_standings_source(2025) AS data');
+  expect(rows[0].data.teamSeasons[0].points_for).toBe(0.1 + 0.2);
 });

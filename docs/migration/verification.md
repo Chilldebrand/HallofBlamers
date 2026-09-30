@@ -23,7 +23,7 @@ The dedicated Supabase backend is connected and populated. The website is still 
 
 ## Remaining work
 
-Standings is the only fully connected league page in the static client. Other read pages, invitation UI, mutations, backup/restore validation, final whole-branch review, and GitHub Pages deployment remain unfinished. Do not publish this preview as the finished website. Cloud ingestion has been verified and published manually; GitHub secret configuration and schedule activation remain pending.
+Standings is the only fully connected league page in the static client. Other read pages, invitation UI, mutations, backup/restore validation, final whole-branch review, and GitHub Pages deployment remain unfinished. Do not publish this preview as the finished website. Cloud ingestion has been verified both locally and on GitHub Actions; the repository secret is configured and scheduled ingestion is enabled.
 
 The user has completed the database-password and account-creation handoffs. Do not request those again. Their credentials are not in Git. Future hosted commands use the ignored `.env.supabase.local` and `NODE_EXTRA_CA_CERTS` pointing to the official certificate under `.superpowers/sdd/2026-09-29-github-pages-supabase/prod-ca-2021.crt`.
 
@@ -40,4 +40,5 @@ Per the league owner's September 30 request, Predictions, Pick'em, and Polls are
 - Browser verified current standings and September 30 last-update timestamp while logged in as commissioner. Paused tabs remain absent.
 - Full suite: 120 files / 1,379 tests passed; root TypeScript, Pages TypeScript, Next build, Pages build, targeted ESLint, and identity audit passed.
 - Independent worker review identified correction ordering. Fixed by restoring durable IDs before applying corrections and building statistics; regression test first reproduced a lost roster correction, then passed. Publication rollback and durable child-ID tests pass.
-- Cached hourly trial succeeded with three requests, 8,205,914 input bytes, and 6.8 seconds. Initial schedule is deliberately reduced to fit measured transfer usage; see cloud-sync.md. Schedules stay disabled until repository secret and manual hosted verification are complete.
+- Cached hourly trial succeeded with three requests, 8,205,914 input bytes, and 6.8 seconds. Initial schedule is deliberately reduced to fit measured transfer usage; see cloud-sync.md. GitHub validation run 36673125100 and publishing run 36673210360 succeeded. The latter published generation 6 (sync run 4), with three ESPN requests, one new snapshot, and 24.7 seconds of worker runtime (52 seconds total workflow). HOB_SYNC_ENABLED=true was saved and verified. Database size after this run: 101,633,171 bytes.
+

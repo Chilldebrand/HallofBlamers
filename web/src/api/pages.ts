@@ -44,7 +44,7 @@ export function pageRequest(path:string,search:string) {
 export async function fetchPage(request:NonNullable<ReturnType<typeof pageRequest>>,signal:AbortSignal){
  if(!supabase)throw Error('Connection unavailable');
  const {data,error}=await supabase.rpc('hob_page',request).abortSignal(signal);
- if(error)throw Error(error.code==='42501'?'You do not have access to this page.':error.code==='22023'?'This page could not be found.':'Unable to load this page. Please try again.');
+ if(error)throw Object.assign(Error(error.code==='42501'?'You do not have access to this page.':error.code==='22023'?'This page could not be found.':'Unable to load this page. Please try again.'),{code:error.code});
  return decodePage(data);
 }
 export function matchupScore(final:boolean,score:number,projected:number|null){

@@ -33,6 +33,6 @@ export function decodeStandings(payload: unknown): StandingsResponse {
 export async function fetchStandings(signal: AbortSignal): Promise<StandingsResponse> {
   if (!supabase) throw new Error("League connection unavailable");
   const { data, error } = await supabase.rpc("hob_standings_source", { requested_season: null }).abortSignal(signal);
-  if (error) throw new Error("Unable to load standings. Please try again.");
+  if (error) throw Object.assign(new Error("Unable to load standings. Please try again."),{code:error.code});
   return decodeStandings(data);
 }

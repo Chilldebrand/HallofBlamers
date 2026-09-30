@@ -1,3 +1,4 @@
+import {isAccessError} from './api/access-error';
 import { useEffect, useState } from "react";
 import { useLocation } from "react-router-dom";
 import { useViewer } from "./auth/session";
@@ -35,15 +36,15 @@ function LeagueApp() {
       try {
         const next = await fetchStandings(controller.signal);
         if (active) { setData(next); setError(false); }
-      } catch {
-        if (active) { setData(null); setError(true); void refresh(); }
+      } catch (e) {
+        if (active) { if(isAccessError(e))setData(null); setError(true); void refresh(); }
       }
     };
     void load();
     const timer = window.setInterval(() => { if (document.visibilityState === "visible") void load(); }, 60_000);
     return () => { active = false; controller.abort(); clearInterval(timer); };
   }, [attempt, refresh]);
-  if (error) return <div className="p-8"><p role="alert">Unable to load league data.</p><button className="mt-4 text-kelly underline" onClick={() => { setError(false); setAttempt(n => n + 1); }}>Try again</button></div>;
+  if (error && !data) return <div className="p-8"><p role="alert">Unable to load league data.</p><button className="mt-4 text-kelly underline" onClick={() => { setError(false); setAttempt(n => n + 1); }}>Try again</button></div>;
   if (!data) return <p role="status" className="p-8 text-muted">Loading the league…</p>;
   const shell = data.shell;
   const params = Object.fromEntries(new URLSearchParams(location.search));
@@ -53,6 +54,7 @@ function LeagueApp() {
       <span>{shell.sync.state === "failed" ? "Latest sync failed · " : shell.sync.state === "running" ? "Updating · " : ""}{shell.sync.lastSuccessAt ? `Last updated ${new Date(shell.sync.lastSuccessAt).toLocaleString()}` : "No completed cloud sync yet"}</span>
       <button onClick={() => void supabase?.auth.signOut()} className="underline">Sign out</button>
     </div>
+    {error&&<p role="alert" className="bg-sheet p-3 text-ink">Connection interrupted. Showing the last loaded data; retrying automatically.</p>}
     <main className="mx-auto w-full max-w-5xl flex-1 bg-sheet px-5 pb-8 pt-5 sm:px-6 md:px-11 md:pb-13 md:pt-[34px]">
       {isRoutePaused(location.pathname) ? <div>
         <h1 className="display text-page-title text-kelly-deep">Temporarily disabled</h1>

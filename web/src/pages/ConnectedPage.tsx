@@ -1,3 +1,4 @@
+import {isAccessError} from '../api/access-error';
 import {useCallback,useEffect,useState} from 'react';
 import {useLocation} from 'react-router-dom';
 import {fetchPage,pageRequest,type PageData} from '../api/pages';
@@ -38,12 +39,12 @@ export default function ConnectedPage(){
  useEffect(()=>{
   const request=pageRequest(pathname,search);if(!request)return;
   const controller=new AbortController();let active=true;
-  const load=async()=>{try{const value=await fetchPage(request,controller.signal);if(active){setData(value);setError('');}}catch(e){if(active){setData(null);setError(e instanceof Error?e.message:'Unable to load this page.');void refresh();}}};
+  const load=async()=>{try{const value=await fetchPage(request,controller.signal);if(active){setData(value);setError('');}}catch(e){if(active){if(isAccessError(e))setData(null);setError(e instanceof Error?e.message:'Unable to load this page.');void refresh();}}};
   void load();const timer=setInterval(()=>{if(document.visibilityState==='visible')void load();},60000);
   return()=>{active=false;controller.abort();clearInterval(timer);};
  },[pathname,search,version,refresh]);
  if(!valid)return <Empty>Page not found. <Link href="/">Return home</Link></Empty>;
- if(error)return <div role="alert"><p>{error}</p><button className="mt-4 text-kelly underline" onClick={reload}>Try again</button></div>;
+ if(error&&!data)return <div role="alert"><p>{error}</p><button className="mt-4 text-kelly underline" onClick={reload}>Try again</button></div>;
  if(!data)return <p role="status">Loading this page…</p>;
- return <PageContent data={data} path={pathname} search={search} reload={reload}/>;
+ return <>{error&&<p role="alert" className="mb-4 border border-line-sheet p-3">Connection interrupted. Your editing work is preserved; retrying automatically.</p>}<PageContent data={data} path={pathname} search={search} reload={reload}/></>;
 }

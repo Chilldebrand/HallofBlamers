@@ -52,3 +52,12 @@ Per the league owner's September 30 request, Predictions, Pick'em, and Polls are
 - Independent review findings corrected: genuine bye weeks remain in schedule inputs, perfect-lineup calculations reject missing opponent scores, and superseded recap versions are hidden.
 - Browser verified current matchup roster detail, franchise season history and Elo chart, and commissioner navigation. Shared-component CSS scanning was added so SVG strokes render in the Pages bundle.
 - Public Pages deployment and production invitation onboarding are not yet verified. No test managers or recaps were added to production.
+
+## GitHub Pages launch — September 30, 2026
+
+- Production deployment succeeded at https://chilldebrand.github.io/HallofBlamers/ from commit 9607347. GitHub Actions run 36748546594 completed both build and deploy successfully.
+- GitHub CI passed 1,413 tests, both TypeScript checks, identity audit, Pages build and public-artifact verification. Public HTML, JavaScript and CSS return successfully over HTTPS; the browser renders the protected sign-in screen.
+- Supabase Site URL now points to the production site. No broad wildcard redirect allowlist was added. Email confirmation falls back to the site; invitees return to their original invitation link and sign in after confirming. Production commissioner browser login is awaiting the user.
+- Live anonymous API check: hob_viewer returns null; hob_shell and hob_page deny access with HTTP 401. No league dataset is embedded in the static artifact.
+- Private backup restored all 55 application tables and 30,097 rows in isolated PGlite, including constraints, exact canonical rows and sequence values. Backup and verification manifest remain ignored under data/private-backups/launch-2026-09-30. Supabase-managed Auth accounts are outside this application backup.
+- Final independent review found no newly introduced launch blockers. Transient poll failures now retain mounted editor drafts; confirmed authorization failure/sign-out clears access. Manual website-only refresh queue is explicitly deferred; the existing GitHub link and scheduled refresh remain available.

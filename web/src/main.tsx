@@ -10,8 +10,8 @@ import "@fontsource/inter/700.css";
 import "../../src/app/globals.css";
 import { MotionProvider } from "../../src/components/layout/MotionProvider";
 import { SessionProvider } from "./auth/session";
-import { Login } from "./pages/Login";
+import { App } from "./App";
 
 createRoot(document.getElementById("root")!).render(
-  <StrictMode><HashRouter><MotionProvider><SessionProvider><Login /></SessionProvider></MotionProvider></HashRouter></StrictMode>,
+  <StrictMode><HashRouter><MotionProvider><SessionProvider><App /></SessionProvider></MotionProvider></HashRouter></StrictMode>,
 );

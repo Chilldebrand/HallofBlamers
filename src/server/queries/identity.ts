@@ -1,18 +1,12 @@
 import { and, eq } from "drizzle-orm";
-import type { FranchiseNameFlags } from "@/components/league/FranchiseName";
+import type { IdentityFlags } from "../../shared/identity";
+export { resolveFranchiseFlags, type IdentityFlags } from "../../shared/identity";
 import type { Db } from "../db/client";
 import { beltReigns, franchises, managers, seasonStats, seasons } from "../db/schema";
 
 // ---------------------------------------------------------------------------
 // Identity flags (docs/design/redesign-2026-08/README.md, "Identity system")
 // ---------------------------------------------------------------------------
-
-export interface IdentityFlags {
-  championFranchiseId: number | null;
-  beltHolderFranchiseId: number | null;
-  sackoFranchiseId: number | null;
-  viewerFranchiseId: number | null;
-}
 
 export interface SeasonStatusRow {
   season: number;
@@ -84,14 +78,7 @@ export function getIdentityFlags(db: Db, viewerManagerId: number | null): Identi
 
 /** Per-franchise booleans for FranchiseName, given the league-wide flags — the shape most
  * callers actually want (one franchise id in, four booleans out). Pure. */
-export function resolveFranchiseFlags(flags: IdentityFlags, franchiseId: number): FranchiseNameFlags {
-  return {
-    isChampion: flags.championFranchiseId === franchiseId,
-    holdsBelt: flags.beltHolderFranchiseId === franchiseId,
-    isSacko: flags.sackoFranchiseId === franchiseId,
-    isViewer: flags.viewerFranchiseId === franchiseId,
-  };
-}
+
 
 // ---------------------------------------------------------------------------
 // Nav's "<manager> · <franchise>" display (Shell, README)

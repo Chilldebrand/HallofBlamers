@@ -37,7 +37,7 @@ Source baseline: fc35fe6. All league pages require membership; admin routes requ
 
 Other endpoints: /join/[token] becomes #/join?token=...; /api/live and /api/live/snapshot become authenticated polling; /api/health becomes a protected status query.
 
-Baseline: 1,343 tests pass, TypeScript passes. Build blocked by Google Fonts network fetch. Identity audit fails in five existing analytics files using ffootball.
+Baseline: 1,343 tests pass, TypeScript passes. Build blocked by Google Fonts network fetch. Identity audit fails in five existing analytics files using the previous source name.
 
 Database backup integrity: quick_check = ok. Six seasons, 15 franchises, 565 matchups, 1,503 transactions, 18,455 roster slots, 210 raw snapshots. Only one manager is provisioned.
 

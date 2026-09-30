@@ -8,7 +8,7 @@ export default defineConfig({
     },
   },
   test: {
-    include: ["src/**/*.test.ts", "src/**/*.test.tsx", "worker/**/*.test.ts"],
+    include: ["src/**/*.test.ts", "src/**/*.test.tsx", "worker/**/*.test.ts", "migration/**/*.test.ts", "supabase/tests/**/*.test.ts", "web/tests/**/*.test.ts", "web/tests/**/*.test.tsx"],
     environment: "node",
   },
 });

@@ -117,7 +117,7 @@ describe("DB-facing", () => {
   let franchiseD: number;
 
   beforeAll(() => {
-    dbPath = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "ffootball-whatif-test-")), "test.db");
+    dbPath = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "hallofblamers-whatif-test-")), "test.db");
     // getScheduleSwapResult/getBestWorstScheduleResult/getOptimalLineupSeasonResult/
     // getWhatIfFranchiseOptions all read through the getDb() lazy singleton, not an injected Db —
     // point it at this temp file before any call (same pattern as standings.test.ts's Career

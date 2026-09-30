@@ -104,7 +104,7 @@ describe("runStatBuild — stage 9 (playoff odds, Task 52)", () => {
   let sqlite: Database.Database;
 
   beforeEach(() => {
-    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "ffootball-playoffodds-build-test-"));
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "hallofblamers-playoffodds-build-test-"));
     const opened = createDb(path.join(tmpDir, "test.db"));
     db = opened.db;
     sqlite = opened.sqlite;

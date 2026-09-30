@@ -17,7 +17,7 @@ describe("playoff odds query layer (DB-facing)", () => {
   let franchiseC: number;
 
   beforeAll(() => {
-    dbPath = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "ffootball-playoffodds-query-test-")), "test.db");
+    dbPath = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "hallofblamers-playoffodds-query-test-")), "test.db");
     // getPlayoffOddsForSeason/getPlayoffRaceLine read through the getDb() lazy singleton — point it
     // at this temp file BEFORE their first call (same pattern standings.test.ts's Career-scope suite
     // uses). Vitest isolates process.env per test file, so this can't leak into other test files.

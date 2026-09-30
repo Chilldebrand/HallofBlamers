@@ -122,8 +122,8 @@
    have to stay in an `inline` theme block rather than being resolved as
    static values at build time. */
 @theme inline {
-  --font-display: var(--font-display);
-  --font-body: var(--font-body);
+  --font-display: "Barlow Condensed";
+  --font-body: "Inter";
 }
 
 :root {

@@ -335,7 +335,7 @@ export async function main(): Promise<void> {
     throw new Error(`playoffodds:backtest: source database not found at ${resolvedSource}`);
   }
 
-  const scratchDir = fs.mkdtempSync(path.join(os.tmpdir(), "ffootball-playoffodds-backtest-"));
+  const scratchDir = fs.mkdtempSync(path.join(os.tmpdir(), "hallofblamers-playoffodds-backtest-"));
   const scratchPath = path.join(scratchDir, "backtest.db");
 
   try {

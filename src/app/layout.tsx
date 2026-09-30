@@ -1,22 +1,16 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
-import { Barlow_Condensed, Inter } from "next/font/google";
+import "@fontsource/barlow-condensed/600.css";
+import "@fontsource/barlow-condensed/700.css";
+import "@fontsource/inter/400.css";
+import "@fontsource/inter/500.css";
+import "@fontsource/inter/600.css";
+import "@fontsource/inter/700.css";
 import { MotionProvider } from "@/components/layout/MotionProvider";
 import "./globals.css";
 
 // Display face: uppercase, wide-tracking headings/eyebrows (see `.display`
 // utility in globals.css). Only 600/700 are used — no light/regular weights.
-const barlowCondensed = Barlow_Condensed({
-  subsets: ["latin"],
-  weight: ["600", "700"],
-  variable: "--font-display",
-});
-
-// Body face: everything else — copy, table cells, labels.
-const inter = Inter({
-  subsets: ["latin"],
-  variable: "--font-body",
-});
 
 export const metadata: Metadata = {
   title: {
@@ -28,7 +22,7 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="en" className={`${barlowCondensed.variable} ${inter.variable}`}>
+    <html lang="en">
       <body className="min-h-screen bg-bg text-ink antialiased">
         <MotionProvider>{children}</MotionProvider>
       </body>

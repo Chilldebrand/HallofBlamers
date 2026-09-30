@@ -21,7 +21,7 @@ describe("getPlayoffRaceLine — no active season / no stats:build has run yet",
   let dbPath: string;
 
   beforeAll(() => {
-    dbPath = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "ffootball-playoffodds-empty-test-")), "test.db");
+    dbPath = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "hallofblamers-playoffodds-empty-test-")), "test.db");
     process.env.DATABASE_PATH = dbPath;
     const opened = createDb(dbPath);
     db = opened.db;

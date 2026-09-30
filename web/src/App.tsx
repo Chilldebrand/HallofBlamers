@@ -9,6 +9,7 @@ import Link from "./components/Link";
 import { Login } from "./pages/Login";
 import StandingsPage from "./pages/Standings";
 import { supabase } from "./lib/supabase";
+import { isRoutePaused } from "../../src/components/layout/nav-items";
 
 export function App() {
   const { loading, viewer } = useViewer();
@@ -49,7 +50,11 @@ function LeagueApp() {
       <button onClick={() => void supabase?.auth.signOut()} className="underline">Sign out</button>
     </div>
     <main className="mx-auto w-full max-w-5xl flex-1 bg-sheet px-5 pb-8 pt-5 sm:px-6 md:px-11 md:pb-13 md:pt-[34px]">
-      {location.pathname === "/standings" ? <StandingsPage model={buildStandings(data, params)} identityFlags={shell.flags} /> : <div>
+      {isRoutePaused(location.pathname) ? <div>
+        <h1 className="display text-page-title text-kelly-deep">Temporarily disabled</h1>
+        <p className="mt-4 text-muted">This section is paused for now.</p>
+        <Link href="/standings" className="mt-6 inline-block text-kelly underline">View standings</Link>
+      </div> : location.pathname === "/standings" ? <StandingsPage model={buildStandings(data, params)} identityFlags={shell.flags} /> : <div>
         <h1 className="display text-page-title text-kelly-deep">Hall of Blamers</h1>
         <p className="mt-4 text-muted">This preview is being connected to the league. More pages will be available when the migration is complete.</p>
         <Link href="/standings" className="mt-6 inline-block text-kelly underline">View standings</Link>

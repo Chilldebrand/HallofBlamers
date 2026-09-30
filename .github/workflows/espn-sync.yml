@@ -1,0 +1,76 @@
+name: Refresh ESPN data
+
+on:
+  workflow_dispatch:
+    inputs:
+      tier:
+        description: Refresh scope
+        type: choice
+        options: [hourly, daily, live]
+        default: hourly
+      dry_run:
+        description: Validate without publishing
+        type: boolean
+        default: true
+  schedule:
+    - cron: '17 * * * *'
+    - cron: '37 5,11,17,23 * * *'
+    - cron: '43 13 * * *'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: hall-of-blamers-espn-sync
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    if: github.event_name == 'workflow_dispatch' || vars.HOB_SYNC_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: '24'
+          cache: npm
+      - name: Choose refresh scope and gate live windows
+        id: gate
+        env:
+          REQUESTED_TIER: ${{ inputs.tier }}
+          EVENT_NAME: ${{ github.event_name }}
+          SCHEDULE: ${{ github.event.schedule }}
+        run: |
+          node --input-type=module <<'NODE'
+          import { appendFileSync } from 'node:fs';
+          import { isWithinLiveWindow } from './src/server/sync/live-window.ts';
+          const tier = process.env.EVENT_NAME === 'workflow_dispatch' ? process.env.REQUESTED_TIER : process.env.SCHEDULE === '43 13 * * *' ? 'daily' : process.env.SCHEDULE === '17 * * * *' ? 'live' : 'hourly';
+          if (!['daily', 'hourly', 'live'].includes(tier)) throw new Error('Invalid scope');
+          const run = tier !== 'live' || isWithinLiveWindow(new Date());
+          appendFileSync(process.env.GITHUB_OUTPUT, `tier=${tier}\nrun=${run}\n`);
+          NODE
+      - name: Install dependencies
+        if: steps.gate.outputs.run == 'true'
+        run: npm ci --no-audit --no-fund
+      - name: Download Supabase public certificate
+        if: steps.gate.outputs.run == 'true'
+        run: curl --fail --silent --show-error --location --proto '=https' --tlsv1.2 https://supabase-downloads.s3-ap-southeast-1.amazonaws.com/prod/ssl/prod-ca-2021.crt --output "$RUNNER_TEMP/supabase-ca.crt"
+      - name: Refresh and atomically publish
+        if: steps.gate.outputs.run == 'true'
+        env:
+          PGHOST: aws-0-ca-central-1.pooler.supabase.com
+          PGPORT: '5432'
+          PGDATABASE: postgres
+          PGUSER: postgres.aridozcvdxlfnibcnejf
+          PGPASSWORD: ${{ secrets.HOB_DATABASE_PASSWORD }}
+          NODE_EXTRA_CA_CERTS: ${{ runner.temp }}/supabase-ca.crt
+          SYNC_TIER: ${{ steps.gate.outputs.tier }}
+          DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          test -n "$PGPASSWORD" || { echo 'Missing HOB_DATABASE_PASSWORD repository secret'; exit 1; }
+          args=()
+          if [ "$DRY_RUN" = 'true' ]; then args+=(--dry-run); fi
+          node --import tsx worker/cloud/cli.ts "$SYNC_TIER" "${args[@]}"

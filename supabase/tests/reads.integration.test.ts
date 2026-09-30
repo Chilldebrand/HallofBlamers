@@ -13,6 +13,7 @@ beforeEach(async () => {
   await db.exec(readFileSync("supabase/migrations/202609290002_auth.sql", "utf8"));
   await db.exec(readFileSync("supabase/migrations/202609290003_reads.sql", "utf8"));
   await db.exec(readFileSync("supabase/migrations/202609300001_float_precision.sql", "utf8"));
+  await db.exec(readFileSync("supabase/migrations/202609300002_sync.sql", "utf8"));
   await db.exec(`INSERT INTO hob_private.managers(id,name,role,invite_token) VALUES(2,'Member','manager','never-expose-me');
     INSERT INTO hob_private.memberships(auth_user_id,manager_id) VALUES('${user}',2);
     INSERT INTO hob_private.leagues(id,espn_league_id,name,first_season) VALUES(1,1690915927,'Fixture',2025);
@@ -44,4 +45,12 @@ test("standings JSON preserves stored floating-point precision", async () => {
   await login();
   const { rows } = await db.query<{ data: { teamSeasons: { points_for: number }[] } }>('SELECT public.hob_standings_source(2025) AS data');
   expect(rows[0].data.teamSeasons[0].points_for).toBe(0.1 + 0.2);
+});
+
+test("shell reports sync failure while retaining the previous successful timestamp", async () => {
+  await db.exec("INSERT INTO hob_private.sync_runs(started_at,finished_at,tier,status) VALUES('2026-09-01','2026-09-01','daily','ok'),('2026-09-02','2026-09-02','hourly','auth_failed')");
+  await login();
+  const { rows } = await db.query<{ data: { sync: { state: string; lastSuccessAt: string } } }>('SELECT public.hob_shell() AS data');
+  expect(rows[0].data.sync.state).toBe('failed');
+  expect(rows[0].data.sync.lastSuccessAt).toContain('2026-09-01');
 });

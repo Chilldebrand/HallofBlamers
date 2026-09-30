@@ -23,8 +23,21 @@ The dedicated Supabase backend is connected and populated. The website is still 
 
 ## Remaining work
 
-Standings is the only fully connected league page in the static client. Other read pages, invitation UI, mutations, cloud sync worker, backup/restore validation, final whole-branch review, and GitHub Pages deployment remain unfinished. Do not publish this preview as the finished website. Imported sync timestamps describe the old local data; scheduled cloud ingestion is not enabled.
+Standings is the only fully connected league page in the static client. Other read pages, invitation UI, mutations, backup/restore validation, final whole-branch review, and GitHub Pages deployment remain unfinished. Do not publish this preview as the finished website. Cloud ingestion has been verified and published manually; GitHub secret configuration and schedule activation remain pending.
 
 The user has completed the database-password and account-creation handoffs. Do not request those again. Their credentials are not in Git. Future hosted commands use the ignored `.env.supabase.local` and `NODE_EXTRA_CA_CERTS` pointing to the official certificate under `.superpowers/sdd/2026-09-29-github-pages-supabase/prod-ca-2021.crt`.
 
 Continue the existing approved plan in the existing worktree. Consult its ledger; do not redo the completed import or create another Supabase project.
+
+## Temporarily paused features
+
+Per the league owner's September 30 request, Predictions, Pick'em, and Polls are disabled for now. Shared navigation hides these tabs; the Pages client blocks their routes and poll-admin routes with a paused message. Preserve their source code/data for reactivation. Their migration is deferred and is not a current launch requirement.
+
+## Current-data refresh
+
+- Fifth migration applied: truthful failure status and private compact snapshot cache with RLS.
+- Successful hosted run 3 / statistics generation 5, finished 2026-09-30 05:15:14 UTC: 2026 Week 4, 12 teams, six final games each for Weeks 1–3, Week 4 not final. Nine ESPN requests, nine new snapshots, 27.6 seconds. Database size 99,036,307 bytes.
+- Browser verified current standings and September 30 last-update timestamp while logged in as commissioner. Paused tabs remain absent.
+- Full suite: 120 files / 1,379 tests passed; root TypeScript, Pages TypeScript, Next build, Pages build, targeted ESLint, and identity audit passed.
+- Independent worker review identified correction ordering. Fixed by restoring durable IDs before applying corrections and building statistics; regression test first reproduced a lost roster correction, then passed. Publication rollback and durable child-ID tests pass.
+- Cached hourly trial succeeded with three requests, 8,205,914 input bytes, and 6.8 seconds. Initial schedule is deliberately reduced to fit measured transfer usage; see cloud-sync.md. Schedules stay disabled until repository secret and manual hosted verification are complete.

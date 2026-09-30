@@ -85,6 +85,8 @@ export interface NormalizeOptions {
    * contract; a direct `normalizeSeason` call should never need this.
    */
   _skipFranchiseSeedApply?: boolean;
+  /** Cloud adapter restores durable row IDs before applying corrections. */
+  _skipCorrectionsApply?: boolean;
 }
 
 export interface NormalizeSummary {
@@ -233,8 +235,10 @@ export function normalizeSeason(db: Db, season: number, opts?: NormalizeOptions)
 
       w.draft_picks = insertDraftPicks(tx, season, picks, teamSeasonIdByEspnId, warnings);
 
-      const correctionResult = applyCorrections(tx, season);
-      warnings.push(...correctionResult.warnings);
+      if (!opts?._skipCorrectionsApply) {
+        const correctionResult = applyCorrections(tx, season);
+        warnings.push(...correctionResult.warnings);
+      }
 
       // Only commit to the outer `written` once the whole transaction body has run without
       // throwing — better-sqlite3 rolls the DB back on a thrown error, and this keeps the

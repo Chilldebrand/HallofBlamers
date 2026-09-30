@@ -8,12 +8,16 @@ import { BottomTabBar } from "./components/BottomTabBar";
 import Link from "./components/Link";
 import { Login } from "./pages/Login";
 import StandingsPage from "./pages/Standings";
+import ConnectedPage from "./pages/ConnectedPage";
+import {Join} from "./pages/Join";
 import { supabase } from "./lib/supabase";
 import { isRoutePaused } from "../../src/components/layout/nav-items";
 
 export function App() {
   const { loading, viewer } = useViewer();
+  const location=useLocation();
   if (loading) return <p role="status" className="p-8 text-muted">Checking league access…</p>;
+  if(location.pathname==='/join')return <Join/>;
   if (!viewer) return <Login />;
   return <LeagueApp key={viewer.authUserId} />;
 }
@@ -54,11 +58,7 @@ function LeagueApp() {
         <h1 className="display text-page-title text-kelly-deep">Temporarily disabled</h1>
         <p className="mt-4 text-muted">This section is paused for now.</p>
         <Link href="/standings" className="mt-6 inline-block text-kelly underline">View standings</Link>
-      </div> : location.pathname === "/standings" ? <StandingsPage model={buildStandings(data, params)} identityFlags={shell.flags} /> : <div>
-        <h1 className="display text-page-title text-kelly-deep">Hall of Blamers</h1>
-        <p className="mt-4 text-muted">This preview is being connected to the league. More pages will be available when the migration is complete.</p>
-        <Link href="/standings" className="mt-6 inline-block text-kelly underline">View standings</Link>
-      </div>}
+      </div> : location.pathname === "/standings" ? <StandingsPage model={buildStandings(data, params)} identityFlags={shell.flags} /> : <ConnectedPage key={location.pathname+location.search} />}
     </main>
     <BottomTabBar />
   </div>;

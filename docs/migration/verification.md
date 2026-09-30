@@ -23,7 +23,7 @@ The dedicated Supabase backend is connected and populated. The website is still 
 
 ## Remaining work
 
-Standings is the only fully connected league page in the static client. Other read pages, invitation UI, mutations, backup/restore validation, final whole-branch review, and GitHub Pages deployment remain unfinished. Do not publish this preview as the finished website. Cloud ingestion has been verified both locally and on GitHub Actions; the repository secret is configured and scheduled ingestion is enabled.
+The active league pages, invitation UI, and commissioner settings/recap mutations are connected. Backup/restore validation, production invitation email redirect configuration, final whole-branch review, and GitHub Pages deployment remain unfinished. Do not publish this preview as the finished website. Cloud ingestion has been verified both locally and on GitHub Actions; the repository secret is configured and scheduled ingestion is enabled.
 
 The user has completed the database-password and account-creation handoffs. Do not request those again. Their credentials are not in Git. Future hosted commands use the ignored `.env.supabase.local` and `NODE_EXTRA_CA_CERTS` pointing to the official certificate under `.superpowers/sdd/2026-09-29-github-pages-supabase/prod-ca-2021.crt`.
 
@@ -42,3 +42,13 @@ Per the league owner's September 30 request, Predictions, Pick'em, and Polls are
 - Independent worker review identified correction ordering. Fixed by restoring durable IDs before applying corrections and building statistics; regression test first reproduced a lost roster correction, then passed. Publication rollback and durable child-ID tests pass.
 - Cached hourly trial succeeded with three requests, 8,205,914 input bytes, and 6.8 seconds. Initial schedule is deliberately reduced to fit measured transfer usage; see cloud-sync.md. GitHub validation run 36673125100 and publishing run 36673210360 succeeded. The latter published generation 6 (sync run 4), with three ESPN requests, one new snapshot, and 24.7 seconds of worker runtime (52 seconds total workflow). HOB_SYNC_ENABLED=true was saved and verified. Database size after this run: 101,633,171 bytes.
 
+
+## Connected pages — September 30
+
+- Added membership-gated APIs and client routes for home, matchups/rosters, franchises/Elo, seasons/drafts, head-to-head, records, belt, timeline, transactions, What If, recaps, and commissioner administration. Empty source datasets remain explicit; AI recap generation stays unavailable.
+- Commissioner settings, manager invitations/revocation, and manual recap editing/publication use protected RPCs. Recap edits reject stale versions; public recaps return only the newest published version per week.
+- Applied migrations 202609300003 through 202609300005 to the hosted project. No original SQLite data changed. Read-only hosted checks rendered 19 routes with actual data (26–110 KB JSON per response).
+- Full suite: 124 files / 1,412 tests passed. Both TypeScript checks, targeted ESLint, identity audit, Next build and Pages build passed. Pages bundle is approximately 150 KB gzipped; Vite reports its nonblocking 500 KB uncompressed chunk warning.
+- Independent review findings corrected: genuine bye weeks remain in schedule inputs, perfect-lineup calculations reject missing opponent scores, and superseded recap versions are hidden.
+- Browser verified current matchup roster detail, franchise season history and Elo chart, and commissioner navigation. Shared-component CSS scanning was added so SVG strokes render in the Pages bundle.
+- Public Pages deployment and production invitation onboarding are not yet verified. No test managers or recaps were added to production.

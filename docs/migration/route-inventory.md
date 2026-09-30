@@ -44,3 +44,7 @@ Database backup integrity: quick_check = ok. Six seasons, 15 franchises, 565 mat
 Empty datasets at baseline: trade_ledger, waiver_acquisitions, draft_grades, draft_pick_values, playoff_odds, recaps, polls, predictions, pickem_picks. Preserve explicit unavailable/empty states until source coverage and rebuilt statistics establish real results.
 
 Storage: consistent backup 210,407,424 bytes; raw snapshots occupy 206,233,600 bytes. Keep snapshots private and measure Postgres compression before considering archival.
+
+## September 30 connection checkpoint
+
+All active routes above now use authenticated Supabase reads, including nested matchup, franchise, season, and rivalry detail. Commissioner recap/settings and invitation controls use protected writes. Predictions, Pick’em, Polls and poll administration remain paused at the owner’s request. AI recap generation remains explicitly unavailable; manual drafts and publication work. This is the connected preview, not a completed public Pages deployment.

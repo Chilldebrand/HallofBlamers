@@ -1,4 +1,4 @@
-import {EloChart} from '../../../src/components/history/EloChart';
+import {FranchiseProfile} from './FranchiseProfile';
 import {buildEloSeries,markSeasonEndDots} from '../../../src/shared/elo-series';
 import type {PageData} from '../api/pages';
 import Link from '../components/Link';
@@ -16,15 +16,7 @@ export function Belt({data,embedded=false}:{data:PageData;embedded?:boolean}){co
 
 export function Franchises({data,id}:{data:PageData;id:number|null}){
  if(id===null)return <><PageHeader eyebrow="The Archive" title="Franchises"/><Section title="All-time standings"><GridTable head={['Franchise','Status','Seasons','W–L–T','Titles','Elo']} rows={data.franchises.map(f=>{const c=data.careerStats.find(r=>r.franchiseId===f.id);return [<Franchise key={f.id} data={data} id={f.id}/>,f.active?'Active':'Departed',c?.seasons??0,c?`${c.wins}–${c.losses}–${c.ties}`:'—',c?.championships??'—',number(c?.currentElo,0)];})}/></Section></>;
- const f=data.franchises.find(r=>r.id===id),c=data.careerStats.find(r=>r.franchiseId===id);
- const series=buildEloSeries(data.eloHistory);
- series.points=markSeasonEndDots(series.points,new Set(data.seasonStats.filter(s=>s.champion).map(s=>s.season)),new Set(data.seasonStats.filter(s=>s.sacko).map(s=>s.season)));
- if(!f)return <Empty>Franchise not found.</Empty>;
- return <><Link href="/franchises" className="text-kelly">← Franchises</Link><PageHeader eyebrow={`${f.joinedSeason}–${f.departedSeason??'present'} · ${f.managerName}`} title={f.canonicalName}/>{c&&<div className="my-6 grid grid-cols-2 gap-4 md:grid-cols-4">{[['Record',`${c.wins}–${c.losses}–${c.ties}`],['Titles',c.championships],['Points',number(c.pointsFor)],['Elo',number(c.currentElo,0)]].map(([k,v])=><div key={k} className="border border-line-sheet bg-sheet-raised p-4"><p className="display text-xs tracking-wide text-muted">{k}</p><p className="mt-2 text-2xl tabular-nums">{v}</p></div>)}</div>}
- <Section title="Season history"><SeasonStats data={data}/></Section>
- <Section title="Elo history"><EloChart series={series}/></Section>
- <Section title="Trophy case">{data.achievements.length?<div className="grid gap-3 sm:grid-cols-2">{data.achievements.map(a=><div key={a.id} className="border border-line-sheet p-4"><h3 className="display text-lg">{label(a.achievementKey)}</h3><p className="text-sm text-muted">{a.season} · Week {a.week}</p></div>)}</div>:<Empty>No achievements recorded yet.</Empty>}</Section>
- <Section title="Head-to-head"><H2HTable data={data}/></Section><Belt data={data} embedded/><Records data={data} embedded/></>;
+ return <FranchiseProfile data={data} id={id}/>;
 }
 
 export function SeasonStats({data}:{data:PageData}){return <GridTable head={['Season','Franchise','W–L–T','PF','PA','Finish','Honors']} rows={data.seasonStats.map(r=>[<Link key="year" href={`/seasons/${r.season}`}>{r.season}</Link>,<Franchise key={r.id} data={data} id={r.franchiseId}/>,`${r.wins}–${r.losses}–${r.ties}`,number(r.pointsFor),number(r.pointsAgainst),r.finalStanding&&r.finalStanding>0?r.finalStanding:'—',r.champion?'Champion':r.sacko?'Sacko':r.madePlayoffs?'Playoffs':'—'])}/>;}
@@ -36,4 +28,5 @@ export function H2H({data,a,b}:{data:PageData;a:number|null;b:number|null}){
  const games=data.matchups.filter(m=>{const x=data.teamSeasons.find(t=>t.id===m.homeTeamSeasonId)?.franchiseId,y=data.teamSeasons.find(t=>t.id===m.awayTeamSeasonId)?.franchiseId;return(x===a&&y===b)||(x===b&&y===a);});
  return <><PageHeader eyebrow="The Archive" title="Head-to-Head"/><Section title={a===null?'All matchups':`${name(data,a)} vs. ${name(data,b)}`}><H2HTable data={{...data,h2hPairs:pairs}}/></Section>{a!==null&&<Section title="Game log"><GameCards data={{...data,matchups:games}}/></Section>}</>;
 }
+
 

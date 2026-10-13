@@ -10,7 +10,7 @@ beforeEach(async()=>{
  CREATE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql STABLE AS $$ SELECT nullif(current_setting('request.jwt.claim.sub',true),'')::uuid $$;
  GRANT USAGE ON SCHEMA auth TO anon,authenticated; GRANT EXECUTE ON FUNCTION auth.uid() TO anon,authenticated;`);
  await db.exec(generateSchema());
- for(const file of ['202609290002_auth.sql','202609290003_reads.sql','202609300003_pages.sql','202609300004_page_mutations.sql','202609300005_recap_versions.sql']) await db.exec(readFileSync('supabase/migrations/'+file,'utf8'));
+ for(const file of ['202609290002_auth.sql','202609290003_reads.sql','202609300003_pages.sql','202609300004_page_mutations.sql','202609300005_recap_versions.sql','202610130001_franchise_history.sql']) await db.exec(readFileSync('supabase/migrations/'+file,'utf8'));
  await db.exec(`INSERT INTO hob_private.managers(id,name,role,invite_token) VALUES(2,'Member','manager','private-token');
  INSERT INTO hob_private.memberships(auth_user_id,manager_id) VALUES('${member}',2);
  INSERT INTO hob_private.leagues(id,espn_league_id,name,first_season) VALUES(1,1690915927,'Fixture',2025);
@@ -61,4 +61,15 @@ test('commissioner publication is validated and rejects stale draft edits',async
  await expect(db.query("select public.hob_save_recap(1,2025,1,'Stale overwrite','PRIVATE DRAFT','draft','save')")).rejects.toThrow();
  const result=await db.query("select public.hob_page('recaps',2025,1,null) as data");
  expect(JSON.stringify(result.rows)).toContain('New published text');
+});
+
+test('franchise profiles include only their finalized games for result strips',async()=>{
+ await db.exec(`RESET ROLE;
+ INSERT INTO hob_private.franchises(id,canonical_name,manager_name,joined_season) VALUES(1,'One','One',2025),(2,'Two','Two',2025),(3,'Three','Three',2025);
+ INSERT INTO hob_private.team_seasons(id,season,franchise_id,espn_team_id,team_name,wins,losses,ties,points_for,points_against,made_playoffs) VALUES(1,2025,1,1,'One',0,0,0,0,0,false),(2,2025,2,2,'Two',0,0,0,0,0,false),(3,2025,3,3,'Three',0,0,0,0,0,false);
+ INSERT INTO hob_private.matchups(id,season,week,espn_matchup_id,home_team_season_id,away_team_season_id,home_score,away_score,is_final,winner) VALUES(1,2025,1,1,1,2,100,90,true,'home'),(2,2025,2,2,2,1,100,90,false,null),(3,2025,3,3,2,3,100,90,true,'home'); SET ROLE authenticated;`);
+ const result=await db.query<{data:{matchups:{id:number}[]}}>("select public.hob_page('franchises',null,null,1) as data");
+ expect(result.rows[0].data.matchups.map(m=>m.id)).toEqual([1]);
+ const list=await db.query<{data:{matchups:{id:number}[]}}>("select public.hob_page('franchises',null,null,null) as data");
+ expect(list.rows[0].data.matchups).toEqual([]);
 });

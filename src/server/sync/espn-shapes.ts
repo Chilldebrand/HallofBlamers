@@ -229,6 +229,8 @@ export interface EspnRosterEntry {
 
 export interface EspnWeeklyScheduleSide {
   teamId?: unknown;
+  totalPoints?: unknown;
+  totalPointsLive?: unknown;
   rosterForCurrentScoringPeriod?: { entries?: EspnRosterEntry[] };
 }
 

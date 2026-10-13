@@ -1,6 +1,8 @@
 import { tables, tableName, quote } from "../../migration/postgres-schema";
 import { convertValue, type PgConnection } from "../../migration/import-sqlite";
 import type { DataSet, Row } from "./workspace";
+import { decodeSnapshot } from "./snapshot-codec";
+import { compactSnapshotPayload } from "./workspace";
 
 export const DERIVED_TABLES = ["team_week", "allplay_week", "elo_history", "franchise_elo", "belt_matches", "belt_reigns", "record_entries", "h2h_pairs", "career_stats", "season_stats", "context_notes", "achievements", "slot_scoring_stats", "playoff_odds"];
 export const SEASON_TABLES = ["team_seasons", "weeks", "matchups", "roster_slots", "transactions", "draft_picks"];
@@ -21,8 +23,9 @@ export async function loadInputs(pg: PgConnection, season: number) {
       if (name === "app_settings") suffix = " WHERE key IN ('espn_league_id','belt_overrides')";
       if (name === "stat_builds") suffix = " ORDER BY id DESC LIMIT 1";
       const snapshotColumns = tables.find(t => t.name === "snapshots")!.columns.map(c => c.name === "payload" ? "COALESCE(c.payload,s.payload) AS payload" : `s.${quote(c.name)}`).join(",");
-      const sql = name === "snapshots" ? `SELECT DISTINCT ON (s.view,s.scoring_period) ${snapshotColumns} FROM hob_private.snapshots s LEFT JOIN hob_private.cloud_snapshot_cache c ON c.snapshot_id=s.id AND c.version=1 WHERE s.season=$1 AND NOT s.superseded ORDER BY s.view,s.scoring_period,s.fetched_at DESC,s.id DESC` : `SELECT * FROM ${tableName(name)}${suffix}`;
+      const sql = name === "snapshots" ? `SELECT DISTINCT ON (s.view,s.scoring_period) ${snapshotColumns} FROM hob_private.snapshots s LEFT JOIN hob_private.cloud_snapshot_cache c ON c.snapshot_id=s.id AND c.version=2 WHERE s.season=$1 AND NOT s.superseded ORDER BY s.view,s.scoring_period,s.fetched_at DESC,s.id DESC` : `SELECT * FROM ${tableName(name)}${suffix}`;
       input[name] = (await pg.query(sql, name === "snapshots" ? [season] : values)).rows;
+      if (name === "snapshots") input[name] = input[name].map(row => ({ ...row, payload: compactSnapshotPayload(String(row.view), decodeSnapshot(String(row.payload))) }));
       if (tables.find(t => t.name === name)?.columns.some(c => "autoIncrement" in c && c.autoIncrement)) {
         maxima[name] = Number((await pg.query(`SELECT COALESCE(max(id),0) AS maximum FROM ${tableName(name)}`)).rows[0].maximum);
       }
@@ -69,7 +72,13 @@ export async function publishGeneration(pg: PgConnection, publication: { season:
         await pg.query(`SELECT setval(pg_get_serial_sequence($1,'id'),COALESCE(max(id),1),count(*)>0) FROM ${tableName(table)}`, [`hob_private.${table}`]);
       }
     }
-    for (const row of rows.cloud_snapshot_cache ?? []) await pg.query("INSERT INTO hob_private.cloud_snapshot_cache(snapshot_id,version,payload) VALUES($1,1,$2) ON CONFLICT(snapshot_id) DO UPDATE SET version=1,payload=EXCLUDED.payload", [row.snapshot_id, row.payload]);
+    for (const row of rows.cloud_snapshot_cache ?? []) await pg.query("INSERT INTO hob_private.cloud_snapshot_cache(snapshot_id,version,payload) VALUES($1,2,$2) ON CONFLICT(snapshot_id) DO UPDATE SET version=2,payload=EXCLUDED.payload WHERE cloud_snapshot_cache.version IS DISTINCT FROM 2 OR cloud_snapshot_cache.payload IS DISTINCT FROM EXCLUDED.payload", [row.snapshot_id, row.payload]);
+    // Only disposable computation caches are pruned. Raw archives remain intact.
+    if (rows.cloud_snapshot_cache) await pg.query(`DELETE FROM hob_private.cloud_snapshot_cache c USING hob_private.snapshots s
+      WHERE c.snapshot_id=s.id AND s.season=$1 AND s.id NOT IN (
+        SELECT DISTINCT ON (view,scoring_period) id FROM hob_private.snapshots
+        WHERE season=$1 AND NOT superseded ORDER BY view,scoring_period,fetched_at DESC,id DESC
+      )`, [season]);
     await pg.query("UPDATE hob_private.sync_runs SET status='ok',finished_at=now(),views_fetched=$2,snapshots_new=$3,events_emitted=$4,error_text=NULL WHERE id=$1", [runId, publication.viewsFetched, publication.snapshotsNew, rows.events?.length ?? 0]);
     await pg.query("SET CONSTRAINTS ALL IMMEDIATE");
     await pg.query("COMMIT");

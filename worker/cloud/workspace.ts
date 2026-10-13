@@ -16,7 +16,7 @@ export function compactSnapshotPayload(view: string, payload: string): string {
     id: entry.id, matchupPeriodId: entry.matchupPeriodId, playoffTierType: entry.playoffTierType, winner: entry.winner,
     ...Object.fromEntries((["home", "away"] as const).map(key => {
       const side = entry[key];
-      return [key, side ? { teamId: side.teamId, rosterForCurrentScoringPeriod: { entries: side.rosterForCurrentScoringPeriod?.entries?.map(r => {
+      return [key, side ? { teamId: side.teamId, totalPoints: side.totalPoints, totalPointsLive: side.totalPointsLive, rosterForCurrentScoringPeriod: { entries: side.rosterForCurrentScoringPeriod?.entries?.map(r => {
         const p = r.playerPoolEntry?.player;
         return { lineupSlotId: r.lineupSlotId, playerPoolEntry: { id: r.playerPoolEntry?.id, appliedStatTotal: r.playerPoolEntry?.appliedStatTotal,
           player: p ? { id: p.id, fullName: p.fullName, defaultPositionId: p.defaultPositionId, eligibleSlots: p.eligibleSlots, proTeamId: p.proTeamId, injuryStatus: p.injuryStatus,

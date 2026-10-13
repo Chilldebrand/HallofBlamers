@@ -9,6 +9,7 @@ import { storeSnapshot } from "../../src/server/sync/snapshots";
 import { emitEvents } from "../../src/server/sync/emit-events";
 import { SEASON_SCOPE_VIEW_KEY, WEEK_SCOPE_VIEW_KEY, TRANSACTIONS_VIEW_KEY, unwrapLeagueHistoryPayload } from "../../src/server/sync/espn-shapes";
 import { quote } from "../../migration/postgres-schema";
+import { encodeSnapshot } from "./snapshot-codec";
 
 export type CloudTier = "live" | "hourly" | "daily";
 export function periodsToFetch(tier: CloudTier, latest: number, boxscores: Set<number>, transactions: Set<number>): number[] {
@@ -53,10 +54,14 @@ export async function refreshWorkspace(input: DataSet, maxima: Record<string, nu
     rows.transaction_items = sqlite.prepare("SELECT * FROM transaction_items WHERE transaction_id IN (SELECT id FROM transactions WHERE season=?)").all(season) as Row[];
     rows.stat_builds = sqlite.prepare("SELECT * FROM stat_builds WHERE id=?").all(built.buildId) as Row[];
     for (const table of ["snapshots", "events"]) rows[table] = sqlite.prepare(`SELECT * FROM ${quote(table)} WHERE id>?`).all(maxima[table] ?? 0) as Row[];
-    rows.cloud_snapshot_cache = sqlite.prepare("SELECT id,view,payload FROM snapshots").all().map(value => {
+    rows.cloud_snapshot_cache = sqlite.prepare(`SELECT id,view,payload FROM (
+      SELECT id,view,payload,ROW_NUMBER() OVER (PARTITION BY view,scoring_period ORDER BY fetched_at DESC,id DESC) AS rank
+      FROM snapshots WHERE season=? AND NOT superseded
+    ) WHERE rank=1`).all(season).map(value => {
       const row = value as Row;
-      return { snapshot_id: row.id, payload: compactSnapshotPayload(String(row.view), String(row.payload)) };
+      return { snapshot_id: row.id, payload: encodeSnapshot(compactSnapshotPayload(String(row.view), String(row.payload))) };
     });
+    rows.snapshots = rows.snapshots.map(row => ({ ...row, payload: encodeSnapshot(String(row.payload)) }));
     return { rows, viewsFetched, snapshotsNew, latestScoringPeriod: latest, buildId: built.buildId, warningCount: normalized.warnings.length + corrected.warnings.length + built.warnings.length, outputBytes: Buffer.byteLength(JSON.stringify(rows)) };
   } finally { sqlite.close(); }
 }

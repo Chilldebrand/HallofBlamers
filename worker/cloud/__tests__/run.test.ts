@@ -36,3 +36,29 @@ test('manual roster corrections survive rebuilding and restoring durable team ID
  expect(second.rows.roster_slots.find(r=>r.week===target.week && r.team_season_id===target.team_season_id && r.player_id===target.player_id)?.points).toBe(77);
 });
 
+
+test('unfinished matchups use their own weekly live scores while final scores remain official',async()=>{
+ const client={async fetchLeague(p:FetchLeagueParams){
+  const season=buildSeasonScopePayload() as {schedule:{home:{totalPoints:number};away:{totalPoints:number};winner:string}[]};
+  season.schedule[2].home.totalPoints=0;season.schedule[2].away.totalPoints=0;season.schedule[2].winner='UNDECIDED';
+  const weekly=buildWeekScopePayload(p.scoringPeriodId as 1|2) as import('../../../src/server/sync/espn-shapes').EspnWeekScopePayload;
+  for(const m of weekly.schedule??[]){
+   if(m.id===103) {Object.assign(m.home!,{totalPoints:0,totalPointsLive:p.scoringPeriodId===2?104.64:999});Object.assign(m.away!,{totalPoints:0,totalPointsLive:103.94});}
+   if(m.id===101) Object.assign(m.home!,{totalPointsLive:999});
+  }
+  const json=p.scoringPeriodId===undefined?season:p.views.includes('mRoster')?weekly:buildTransactionsPeriodPayload(p.scoringPeriodId,[]);
+  return {json,payload:JSON.stringify(json),status:200,url:'https://example.test/fixture'};
+ }};
+ const result=await refreshWorkspace(input(),{},client,{season:2024,tier:'daily',leagueId:555,sleep:async()=>{}});
+ const live=result.rows.matchups.find(r=>r.espn_matchup_id===103)!;
+ expect(live).toMatchObject({home_score:104.64,away_score:103.94,is_final:0,winner:null});
+ expect(result.rows.matchups.find(r=>r.espn_matchup_id===101)?.home_score).toBe(120.5);
+});
+
+test('daily publication stays below budget with large repetitive ESPN responses',async()=>{
+ const client={async fetchLeague(p:FetchLeagueParams){const json=p.scoringPeriodId===undefined?buildSeasonScopePayload():p.views.includes('mRoster')?buildWeekScopePayload(p.scoringPeriodId as 1|2):buildTransactionsPeriodPayload(p.scoringPeriodId,[]);return {json,payload:JSON.stringify({...json,unused:'large stats '.repeat(700000)}),status:200,url:'https://example.test/fixture'};}};
+ const result=await refreshWorkspace(input(),{},client,{season:2024,tier:'daily',leagueId:555,sleep:async()=>{}});
+ expect(result.rows.team_week).toHaveLength(8);
+ expect(result.outputBytes).toBeLessThan(32000000);
+});
+

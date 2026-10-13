@@ -171,6 +171,20 @@ export function normalizeSeason(db: Db, season: number, opts?: NormalizeOptions)
   // entry-id -> tier lookup, merged onto the season-scope schedule for `weeks`/`matchups`.
   const weekNumbers = distinctWeekNumbers(obj.schedule ?? [], warnings);
   const weeklyPayloads = loadWeeklyPayloads(db, season, weekNumbers, warnings);
+  // Season totals stay zero until ESPN finalizes the matchup. Only use the
+  // matching period's box score for running totals; never override final results.
+  for (const entry of obj.schedule ?? []) {
+    if (["HOME", "AWAY", "TIE"].includes(String(entry.winner))) continue;
+    const weekly = weeklyPayloads.get(Number(entry.matchupPeriodId))?.schedule?.find(
+      candidate => candidate.id === entry.id && candidate.matchupPeriodId === entry.matchupPeriodId,
+    );
+    for (const side of ["home", "away"] as const) {
+      const score = asFiniteNumber(weekly?.[side]?.totalPointsLive);
+      if (entry[side] && weekly?.[side]?.teamId === entry[side].teamId && score !== undefined) {
+        entry[side].totalPoints = score;
+      }
+    }
+  }
   const tierByEntryId = buildTierByEntryId(weeklyPayloads);
   const matchupPeriodCount = asFiniteNumber(obj.settings?.scheduleSettings?.matchupPeriodCount);
   const weeksMeta = computeWeeksMeta(obj.schedule ?? [], tierByEntryId, matchupPeriodCount, warnings);

@@ -25,3 +25,29 @@ test('failed publication leaves the previous generation and timestamp untouched'
  expect((await db.query('SELECT current,build_id FROM hob_private.franchise_elo')).rows).toEqual([{current:1500,build_id:1}]);
  expect((await db.query('SELECT status FROM hob_private.sync_runs WHERE id=1')).rows).toEqual([{status:'running'}]);
 },30000);
+
+test('loader decodes cloud archives and ignores old caches that omitted live totals',async()=>{
+ await fixture();
+ await db.exec('CREATE TABLE hob_private.cloud_snapshot_cache(snapshot_id integer PRIMARY KEY,version integer,payload text)');
+ const {encodeSnapshot}=await import('../snapshot-codec');
+ const {loadInputs}=await import('../repository');
+ const raw='{"schedule":[{"home":{"totalPointsLive":104.64}}]}';
+ await db.query("INSERT INTO hob_private.snapshots(id,season,view,url,fetched_at,http_status,payload,payload_hash) VALUES(1,2026,'fixture','https://example.test',now(),200,$1,'hash')",[encodeSnapshot(raw)]);
+ await db.query("INSERT INTO hob_private.cloud_snapshot_cache VALUES(1,1,'{}')");
+ expect((await loadInputs(db,2026)).input.snapshots[0].payload).toBe(raw);
+ await db.query('UPDATE hob_private.cloud_snapshot_cache SET version=2,payload=$1',[encodeSnapshot(raw)]);
+ expect((await loadInputs(db,2026)).input.snapshots[0].payload).toBe(raw);
+},30000);
+
+test('publication prunes obsolete caches without deleting archived responses',async()=>{
+ const rows=await fixture();
+ await db.exec(`CREATE TABLE hob_private.cloud_snapshot_cache(snapshot_id integer PRIMARY KEY,version integer,payload text);
+ INSERT INTO hob_private.snapshots(id,season,view,url,fetched_at,http_status,payload,payload_hash) VALUES
+ (1,2026,'fixture','https://example.test','2026-10-01',200,'old','hash1'),
+ (2,2026,'fixture','https://example.test','2026-10-02',200,'new','hash2');
+ INSERT INTO hob_private.cloud_snapshot_cache VALUES(1,1,'old cache');`);
+ rows.cloud_snapshot_cache=[{snapshot_id:2,payload:'current cache'}];
+ await publishGeneration(db,{season:2026,rows,runId:1,viewsFetched:2,snapshotsNew:0});
+ expect((await db.query('SELECT id,payload FROM hob_private.snapshots ORDER BY id')).rows).toEqual([{id:1,payload:'old'},{id:2,payload:'new'}]);
+ expect((await db.query('SELECT snapshot_id,version FROM hob_private.cloud_snapshot_cache')).rows).toEqual([{snapshot_id:2,version:2}]);
+},30000);

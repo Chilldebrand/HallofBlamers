@@ -39,3 +39,10 @@ test('compact boxscores retain the consumed player and projection fields without
  expect(compact.schedule[0].playoffTierType).toBe('NONE');
  expect(compact.teams).toBeUndefined();
 });
+
+test('compact boxscores preserve live zero and fractional totals',()=>{
+ const raw=JSON.stringify({schedule:[{id:1,matchupPeriodId:5,home:{teamId:1,totalPoints:0,totalPointsLive:104.64},away:{teamId:2,totalPoints:0,totalPointsLive:0}}]});
+ const compact=JSON.parse(compactSnapshotPayload('mBoxscore,mMatchupScore,mRoster',raw));
+ expect(compact.schedule[0].home.totalPointsLive).toBe(104.64);
+ expect(compact.schedule[0].away.totalPointsLive).toBe(0);
+});

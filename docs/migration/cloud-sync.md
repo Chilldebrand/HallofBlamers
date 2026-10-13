@@ -30,3 +30,15 @@ node --env-file=.env.supabase.local --import tsx worker/cloud/cli.ts hourly --dr
 ```
 
 Remove `--dry-run` only to publish. `daily` revisits all elapsed weeks; `live` fetches the current box score and is gated by game windows and active season state. No historical backfill or paid AI/audio service is enabled by this workflow.
+
+## October 13 live-score repair
+
+The cloud schedule now attempts refreshes every five minutes within the existing Eastern game windows. The browser continues polling every minute. GitHub Actions scheduling and ESPN updates are best effort; this is not a real-time delivery guarantee. Six-hour general refreshes and daily corrections remain enabled.
+
+Unfinished matchups use `totalPointsLive` from their own scoring-period box score; final results retain season-scope official totals and winner status. Cache version 2 preserves these live fields. Version 1 caches are ignored and safely rebuilt from archived responses.
+
+New cloud snapshot payloads and computation caches use a `hob:gzip:v1:` storage envelope. `worker/cloud/snapshot-codec.ts` losslessly restores the original UTF-8 response, so its existing payload hash remains valid. Local SQLite snapshots remain raw JSON. Cloud archive consumers must decode the envelope before parsing JSON. Legacy uncompressed cloud rows remain readable. Do not roll the worker back to a version without this decoder after publication; the frontend can still be rolled back independently.
+
+Only the newest computation cache per season/view/period is retained; these caches can be regenerated. Raw snapshot history is not deleted. Existing raw archives are not rewritten. Compression reduces transfer and growth but does not make storage unlimited: the 350 MB storage guard remains. Review Supabase storage and transfer usage as live updates accumulate; archival retention or additional capacity will eventually be needed.
+
+Verified before publication: daily refresh input 9.90 MB, compressed output 8.66 MB (previous output 40.35 MB exceeded the 32 MB limit), 11 ESPN requests. Existing database approximately 266 MB. Earlier cadence/budget estimates above describe the former hourly configuration, not the new five-minute cadence.

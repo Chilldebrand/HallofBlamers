@@ -28,5 +28,3 @@ export function H2H({data,a,b}:{data:PageData;a:number|null;b:number|null}){
  const games=data.matchups.filter(m=>{const x=data.teamSeasons.find(t=>t.id===m.homeTeamSeasonId)?.franchiseId,y=data.teamSeasons.find(t=>t.id===m.awayTeamSeasonId)?.franchiseId;return(x===a&&y===b)||(x===b&&y===a);});
  return <><PageHeader eyebrow="The Archive" title="Head-to-Head"/><Section title={a===null?'All matchups':`${name(data,a)} vs. ${name(data,b)}`}><H2HTable data={{...data,h2hPairs:pairs}}/></Section>{a!==null&&<Section title="Game log"><GameCards data={{...data,matchups:games}}/></Section>}</>;
 }
-
-
